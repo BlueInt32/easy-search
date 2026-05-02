@@ -99,8 +99,7 @@ impl App {
     fn current_actions(&self) -> &[Action] {
         match &self.selected_file {
             Some(p) if p.is_dir() => ACTIONS_DIR,
-            Some(_) => ACTIONS_FILE,
-            None => &[],
+            Some(_) | None => ACTIONS_FILE,
         }
     }
 
@@ -371,16 +370,31 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|| "Actions".to_string());
 
-    let items: Vec<ListItem> = app
+    let no_file = app.selected_file.is_none();
+    let mut items: Vec<ListItem> = app
         .current_actions()
         .iter()
         .map(|a| {
-            ListItem::new(Line::from(vec![
-                Span::styled(format!("[{}] ", a.key), Style::default().fg(Color::Yellow)),
-                Span::raw(a.label),
-            ]))
+            if no_file {
+                ListItem::new(Line::from(vec![
+                    Span::styled(format!("[{}] ", a.key), Style::default().fg(Color::DarkGray)),
+                    Span::styled(a.label, Style::default().fg(Color::DarkGray)),
+                ]))
+            } else {
+                ListItem::new(Line::from(vec![
+                    Span::styled(format!("[{}] ", a.key), Style::default().fg(Color::Yellow)),
+                    Span::raw(a.label),
+                ]))
+            }
         })
         .collect();
+    if no_file {
+        items.push(ListItem::new(Line::default()));
+        items.push(ListItem::new(Span::styled(
+            "press [f] to select a file first",
+            Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+        )));
+    }
 
     let mut action_state = app.action_state.clone();
     f.render_stateful_widget(
@@ -395,7 +409,7 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
                     }))
                     .border_style(Style::default().fg(Color::DarkGray)),
             )
-            .highlight_style(if actions_focus {
+            .highlight_style(if actions_focus && !no_file {
                 Style::default().add_modifier(Modifier::REVERSED)
             } else {
                 Style::default()
