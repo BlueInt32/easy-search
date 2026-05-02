@@ -18,6 +18,7 @@ use std::{
     io,
     path::PathBuf,
     process::{Command, Stdio},
+    time::Duration,
 };
 
 #[derive(Debug, Clone)]
@@ -65,6 +66,8 @@ struct App {
     action_state: ListState,
     history: Vec<PathBuf>,
     status: Option<String>,
+    ffmpeg_log: Option<String>,
+    ffmpeg_child: Option<std::process::Child>,
     cd_target: Option<PathBuf>,
     zone_width: u16,
     dragging: bool,
@@ -84,6 +87,8 @@ impl App {
             action_state,
             history: vec![],
             status: None,
+            ffmpeg_log: None,
+            ffmpeg_child: None,
             cd_target: None,
             zone_width: 30,
             dragging: false,
@@ -142,11 +147,13 @@ impl App {
 
         match action.key {
             'o' => {
-                Command::new("xdg-open").arg(&path).spawn()?;
+                Command::new("xdg-open").arg(&path)
+                    .stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
                 self.status = Some(format!("Opened {}", path.display()));
             }
             'e' => {
-                Command::new("kate").arg(&path).spawn()?;
+                Command::new("kate").arg(&path)
+                    .stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
                 self.status = Some(format!("Editing {}", path.display()));
             }
             'd' => {
@@ -168,13 +175,18 @@ impl App {
             'r' => {
                 let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
                 let output = path.with_file_name(format!("{}-reenc.mp4", stem));
-                Command::new("ffmpeg")
+                let log_path = "/tmp/ratafzf_ffmpeg.log";
+                let log_file = std::fs::File::create(log_path)?;
+                let child = Command::new("ffmpeg")
                     .args([
                         "-i", &path.to_string_lossy(),
                         "-c:v", "libx264", "-crf", "18", "-preset", "slow",
                         "-c:a", "copy", &output.to_string_lossy(),
                     ])
+                    .stdout(Stdio::null()).stderr(log_file)
                     .spawn()?;
+                self.ffmpeg_child = Some(child);
+                self.ffmpeg_log = Some(log_path.to_string());
                 self.status = Some(format!("Encoding → {}", output.display()));
             }
             _ => {}
@@ -194,9 +206,25 @@ fn copy_to_clipboard(s: &str) -> Result<()> {
     Ok(())
 }
 
+fn ffmpeg_last_line(log_path: &str) -> Option<String> {
+    let content = std::fs::read_to_string(log_path).ok()?;
+    content.split('\r').filter(|s| !s.trim().is_empty()).last()
+        .map(|s| s.trim().to_string())
+}
+
 fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<()> {
     loop {
+        if let Some(ref log_path) = app.ffmpeg_log.clone() {
+            if let Some(line) = ffmpeg_last_line(log_path) {
+                app.status = Some(format!("{}  [x] annuler", line));
+            }
+        }
+
         terminal.draw(|f| ui(f, app))?;
+
+        if !event::poll(Duration::from_millis(250))? {
+            continue;
+        }
 
         match event::read()? {
             Event::Mouse(mouse) => {
@@ -226,6 +254,13 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                     continue;
                 }
                 match key.code {
+                KeyCode::Char('x') if app.ffmpeg_child.is_some() => {
+                    if let Some(mut child) = app.ffmpeg_child.take() {
+                        let _ = child.kill();
+                    }
+                    app.ffmpeg_log = None;
+                    app.status = Some("Encodage annulé".to_string());
+                }
                 KeyCode::Char('q') => return Ok(()),
                 KeyCode::Tab | KeyCode::Char('h') | KeyCode::Char('l') => {
                     app.focus = match app.focus {
