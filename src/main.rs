@@ -27,6 +27,7 @@ struct Action {
 
 const ACTIONS_FILE: &[Action] = &[
     Action { key: 'o', label: "open" },
+    Action { key: 'e', label: "edit with kate" },
     Action { key: 'd', label: "cd" },
     Action { key: 'c', label: "copy path" },
     Action { key: 'n', label: "copy filename" },
@@ -137,6 +138,10 @@ impl App {
             'o' => {
                 Command::new("xdg-open").arg(&path).spawn()?;
                 self.status = Some(format!("Opened {}", path.display()));
+            }
+            'e' => {
+                Command::new("kate").arg(&path).spawn()?;
+                self.status = Some(format!("Editing {}", path.display()));
             }
             'd' => {
                 let target = if path.is_dir() { path.clone() } else { path.parent().unwrap_or(&path).to_path_buf() };
