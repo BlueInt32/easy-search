@@ -109,24 +109,19 @@ impl App {
         }
     }
 
-    fn pick_file(&mut self) -> Result<()> {
-        let search_path = self.current_zone_path().to_string();
-        let tmp = "/tmp/ratafzf_result";
-        let _ = std::fs::remove_file(tmp);
-
-        let cmd = format!(
+    fn fzf_cmd(&self) -> String {
+        format!(
             "fdfind --hidden --no-ignore --search-path '{}' \
              -E .wine -E .java -E .thunderbird -E .mozilla -E .git -E node_modules -E obj \
-             | fzf --preview '~/.config/fzf/preview.sh {{}}' --preview-window=right:50% \
-             > {}",
-            search_path, tmp
-        );
+             | fzf --border rounded --border-label ' Pick ' --border-label-pos 2 \
+                   --preview '~/.config/fzf/preview.sh {{}}' --preview-window=right:50%:border-left \
+             > /tmp/ratafzf_result",
+            self.current_zone_path()
+        )
+    }
 
-        Command::new("tmux")
-            .args(["popup", "-E", "-w", "90%", "-h", "90%", "sh", "-c", &cmd])
-            .status()?;
-
-        if let Ok(content) = std::fs::read_to_string(tmp) {
+    fn apply_fzf_result(&mut self) {
+        if let Ok(content) = std::fs::read_to_string("/tmp/ratafzf_result") {
             let path_str = content.trim().to_string();
             if !path_str.is_empty() {
                 let path = PathBuf::from(&path_str);
@@ -137,7 +132,6 @@ impl App {
                 self.status = None;
             }
         }
-        Ok(())
     }
 
     fn run_action(&mut self, action: &Action) -> Result<()> {
@@ -219,6 +213,27 @@ fn ffmpeg_last_line(log_path: &str) -> Option<String> {
         .map(|s| s.trim().to_string())
 }
 
+
+fn open_picker(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<()> {
+    let _ = std::fs::remove_file("/tmp/ratafzf_result");
+    if std::env::var("TMUX").is_ok() {
+        let cmd = format!("{}; tmux wait-for -S ratafzf-done", app.fzf_cmd());
+        Command::new("tmux")
+            .args(["split-window", "-v", "-l", "70%", "sh", "-c", &cmd])
+            .status()?;
+        Command::new("tmux").args(["wait-for", "ratafzf-done"]).status()?;
+    } else {
+        disable_raw_mode()?;
+        execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+        Command::new("sh").args(["-c", &app.fzf_cmd()]).status()?;
+        enable_raw_mode()?;
+        execute!(terminal.backend_mut(), EnterAlternateScreen, EnableMouseCapture)?;
+    }
+    app.apply_fzf_result();
+    terminal.clear()?;
+    Ok(())
+}
+
 fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<()> {
     loop {
         if let Some(ref log_path) = app.ffmpeg_log.clone() {
@@ -276,7 +291,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                     };
                 }
                 KeyCode::Char('f') => {
-                    let _ = app.pick_file();
+                    open_picker(terminal, app)?;
                 }
                 KeyCode::Down | KeyCode::Char('j') => match app.focus {
                     Focus::Zones => {
@@ -307,7 +322,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 },
                 KeyCode::Enter => match app.focus {
                     Focus::Zones => {
-                        let _ = app.pick_file();
+                        open_picker(terminal, app)?;
                     }
                     Focus::Actions => {
                         let idx = app.action_state.selected().unwrap_or(0);
