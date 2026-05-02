@@ -1,9 +1,10 @@
 use anyhow::Result;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
+    event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    // LeaveAlternateScreen kept for cleanup in main
+    event::EnableMouseCapture,
+    event::DisableMouseCapture,
 };
 use ratatui::{
     backend::CrosstermBackend,
@@ -65,6 +66,9 @@ struct App {
     history: Vec<PathBuf>,
     status: Option<String>,
     cd_target: Option<PathBuf>,
+    zone_width: u16,
+    dragging: bool,
+    hover_gutter: bool,
 }
 
 impl App {
@@ -81,6 +85,9 @@ impl App {
             history: vec![],
             status: None,
             cd_target: None,
+            zone_width: 30,
+            dragging: false,
+            hover_gutter: false,
         }
     }
 
@@ -192,12 +199,34 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
     loop {
         terminal.draw(|f| ui(f, app))?;
 
-        if let Event::Key(key) = event::read()? {
-            if key.kind != KeyEventKind::Press {
+        match event::read()? {
+            Event::Mouse(mouse) => {
+                match mouse.kind {
+                    MouseEventKind::Down(MouseButton::Left) => {
+                        if mouse.column == app.zone_width {
+                            app.dragging = true;
+                        }
+                    }
+                    MouseEventKind::Drag(MouseButton::Left) => {
+                        if app.dragging {
+                            app.zone_width = mouse.column.max(10);
+                        }
+                    }
+                    MouseEventKind::Up(MouseButton::Left) => {
+                        app.dragging = false;
+                    }
+                    MouseEventKind::Moved => {
+                        app.hover_gutter = mouse.column == app.zone_width;
+                    }
+                    _ => {}
+                }
                 continue;
             }
-
-            match key.code {
+            Event::Key(key) => {
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+                match key.code {
                 KeyCode::Char('q') => return Ok(()),
                 KeyCode::Tab | KeyCode::Char('h') | KeyCode::Char('l') => {
                     app.focus = match app.focus {
@@ -257,22 +286,50 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 }
                 _ => {}
             }
+            }
+            _ => {}
         }
     }
 }
 
 fn ui(f: &mut ratatui::Frame, app: &App) {
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(25), Constraint::Min(0)])
-        .split(f.area());
-
-    let right = Layout::default()
+    // Split vertically first: main area + statusbar
+    let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(1)])
-        .split(cols[1]);
+        .split(f.area());
 
-    // Zones panel
+    // Split main area: zones | gutter (1 col) | actions
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(app.zone_width),
+            Constraint::Length(1),
+            Constraint::Min(0),
+        ])
+        .split(rows[0]);
+
+    let gutter_style = if app.hover_gutter || app.dragging {
+        Style::default().fg(Color::White)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    // Gutter widget — caractères de jointure avec les bordures hautes/basses
+    let h = cols[1].height as usize;
+    let mut gutter_lines = Vec::with_capacity(h);
+    if h > 0 {
+        gutter_lines.push(Line::from(Span::styled("┬", gutter_style)));
+        for _ in 1..h.saturating_sub(1) {
+            gutter_lines.push(Line::from(Span::styled("│", gutter_style)));
+        }
+        if h > 1 {
+            gutter_lines.push(Line::from(Span::styled("┴", gutter_style)));
+        }
+    }
+    f.render_widget(Paragraph::new(gutter_lines), cols[1]);
+
+    // Zones panel — pas de bordure droite (la goutière la remplace)
     let zone_items: Vec<ListItem> = ZONES
         .iter()
         .map(|z| {
@@ -289,13 +346,13 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
         List::new(zone_items)
             .block(
                 Block::default()
-                    .borders(Borders::ALL)
-                    .title("Zones")
-                    .border_style(if zones_focus {
+                    .borders(Borders::LEFT | Borders::TOP | Borders::BOTTOM)
+                    .title(Span::styled("Zones", if zones_focus {
                         Style::default().fg(Color::Yellow)
                     } else {
                         Style::default()
-                    }),
+                    }))
+                    .border_style(Style::default().fg(Color::DarkGray)),
             )
             .highlight_style(if zones_focus {
                 Style::default().add_modifier(Modifier::REVERSED)
@@ -306,7 +363,7 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
         &mut zone_state,
     );
 
-    // Actions panel — titre = fichier sélectionné
+    // Actions panel — pas de bordure gauche (la goutière la remplace)
     let actions_focus = app.focus == Focus::Actions;
     let panel_title = app
         .selected_file
@@ -330,20 +387,20 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
         List::new(items)
             .block(
                 Block::default()
-                    .borders(Borders::ALL)
-                    .title(panel_title)
-                    .border_style(if actions_focus {
+                    .borders(Borders::RIGHT | Borders::TOP | Borders::BOTTOM)
+                    .title(Span::styled(panel_title, if actions_focus {
                         Style::default().fg(Color::Yellow)
                     } else {
                         Style::default()
-                    }),
+                    }))
+                    .border_style(Style::default().fg(Color::DarkGray)),
             )
             .highlight_style(if actions_focus {
                 Style::default().add_modifier(Modifier::REVERSED)
             } else {
                 Style::default()
             }),
-        right[0],
+        cols[2],
         &mut action_state,
     );
 
@@ -354,7 +411,7 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
         .unwrap_or("[Tab] changer focus  [f/Entrée] pick  [q] quit");
     f.render_widget(
         Paragraph::new(status).style(Style::default().fg(Color::DarkGray)),
-        right[1],
+        rows[1],
     );
 }
 
@@ -362,7 +419,7 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
 fn main() -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
@@ -371,7 +428,7 @@ fn main() -> Result<()> {
     let result = run_app(&mut terminal, &mut app);
 
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
 
     if let Some(ref target) = app.cd_target {
         std::fs::write("/tmp/ratafzf_lastdir", target.to_string_lossy().as_bytes())?;
