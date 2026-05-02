@@ -297,7 +297,11 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
                         Style::default()
                     }),
             )
-            .highlight_style(Style::default().add_modifier(Modifier::REVERSED)),
+            .highlight_style(if zones_focus {
+                Style::default().add_modifier(Modifier::REVERSED)
+            } else {
+                Style::default()
+            }),
         cols[0],
         &mut zone_state,
     );
@@ -334,7 +338,11 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
                         Style::default()
                     }),
             )
-            .highlight_style(Style::default().add_modifier(Modifier::REVERSED)),
+            .highlight_style(if actions_focus {
+                Style::default().add_modifier(Modifier::REVERSED)
+            } else {
+                Style::default()
+            }),
         right[0],
         &mut action_state,
     );
