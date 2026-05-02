@@ -34,6 +34,7 @@ const ACTIONS_FILE: &[Action] = &[
     Action { key: 'c', label: "copy path" },
     Action { key: 'n', label: "copy filename" },
     Action { key: 'r', label: "reenc" },
+    Action { key: 'p', label: "open parent folder" },
 ];
 
 const ACTIONS_DIR: &[Action] = &[
@@ -188,6 +189,12 @@ impl App {
                 self.ffmpeg_child = Some(child);
                 self.ffmpeg_log = Some(log_path.to_string());
                 self.status = Some(format!("Encoding → {}", output.display()));
+            }
+            'p' => {
+                let parent = path.parent().unwrap_or(&path).to_path_buf();
+                Command::new("xdg-open").arg(&parent)
+                    .stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
+                self.status = Some(format!("Opened {}", parent.display()));
             }
             _ => {}
         }
