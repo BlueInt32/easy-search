@@ -29,12 +29,12 @@ struct Action {
 
 const ACTIONS_FILE: &[Action] = &[
     Action { key: 'o', label: "open" },
+    Action { key: 'p', label: "open parent folder" },
     Action { key: 'e', label: "edit with kate" },
     Action { key: 'd', label: "cd" },
     Action { key: 'c', label: "copy path" },
     Action { key: 'n', label: "copy filename" },
     Action { key: 'r', label: "reenc" },
-    Action { key: 'p', label: "open parent folder" },
 ];
 
 const ACTIONS_DIR: &[Action] = &[
