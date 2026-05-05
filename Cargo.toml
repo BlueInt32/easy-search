@@ -7,3 +7,6 @@ edition = "2024"
 ratatui = "0.29"
 crossterm = "0.28"
 anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+dirs-next = "2"

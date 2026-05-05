@@ -14,6 +14,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Terminal,
 };
+use serde::{Deserialize, Serialize};
 use std::{
     io,
     path::PathBuf,
@@ -25,6 +26,49 @@ use std::{
 struct Action {
     key: char,
     label: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Zone {
+    name: String,
+    path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Config {
+    zones: Vec<Zone>,
+}
+
+fn config_path() -> PathBuf {
+    dirs_next::config_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join("ratafzf.yaml")
+}
+
+fn load_config() -> Config {
+    let path = config_path();
+    if let Ok(content) = std::fs::read_to_string(&path) {
+        if let Ok(cfg) = serde_yaml::from_str(&content) {
+            return cfg;
+        }
+    }
+    let default = Config {
+        zones: vec![
+            Zone { name: "home".into(),    path: "/home/user".into() },
+            Zone { name: "musique".into(), path: "/mnt/WIN_E/Musique/".into() },
+        ],
+    };
+    let _ = save_config(&default);
+    default
+}
+
+fn save_config(cfg: &Config) -> Result<()> {
+    let path = config_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&path, serde_yaml::to_string(cfg)?)?;
+    Ok(())
 }
 
 const ACTIONS_FILE: &[Action] = &[
@@ -44,16 +88,6 @@ const ACTIONS_DIR: &[Action] = &[
     Action { key: 'n', label: "copy filename" },
 ];
 
-struct Zone {
-    name: &'static str,
-    path: &'static str,
-}
-
-const ZONES: &[Zone] = &[
-    Zone { name: "home",    path: "/home/user" },
-    Zone { name: "musique", path: "/mnt/WIN_E/Musique/" },
-];
-
 #[derive(PartialEq)]
 enum Focus {
     Zones,
@@ -62,6 +96,7 @@ enum Focus {
 
 struct App {
     focus: Focus,
+    zones: Vec<Zone>,
     zone_state: ListState,
     selected_file: Option<PathBuf>,
     action_state: ListState,
@@ -77,12 +112,14 @@ struct App {
 
 impl App {
     fn new() -> Self {
+        let cfg = load_config();
         let mut zone_state = ListState::default();
         zone_state.select(Some(0));
         let mut action_state = ListState::default();
         action_state.select(Some(0));
         Self {
             focus: Focus::Zones,
+            zones: cfg.zones,
             zone_state,
             selected_file: None,
             action_state,
@@ -97,9 +134,16 @@ impl App {
         }
     }
 
-    fn current_zone_path(&self) -> &'static str {
+    fn current_zone_path(&self) -> &str {
         let i = self.zone_state.selected().unwrap_or(0);
-        ZONES.get(i).map(|z| z.path).unwrap_or("/home/user")
+        self.zones.get(i).map(|z| z.path.as_str()).unwrap_or("/home/user")
+    }
+
+    fn reload_zones(&mut self) {
+        let cfg = load_config();
+        let prev = self.zone_state.selected().unwrap_or(0);
+        self.zones = cfg.zones;
+        self.zone_state.select(Some(prev.min(self.zones.len().saturating_sub(1))));
     }
 
     fn current_actions(&self) -> &[Action] {
@@ -234,11 +278,22 @@ fn open_picker(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut 
     Ok(())
 }
 
+fn edit_config(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+    let path = config_path();
+    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".into());
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+    Command::new(&editor).arg(&path).status()?;
+    enable_raw_mode()?;
+    execute!(terminal.backend_mut(), EnterAlternateScreen, EnableMouseCapture)?;
+    Ok(())
+}
+
 fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<()> {
     loop {
         if let Some(ref log_path) = app.ffmpeg_log.clone() {
             if let Some(line) = ffmpeg_last_line(log_path) {
-                app.status = Some(format!("{}  [x] annuler", line));
+                app.status = Some(line);
             }
         }
 
@@ -284,6 +339,11 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                     app.status = Some("Encodage annulé".to_string());
                 }
                 KeyCode::Char('q') => return Ok(()),
+                KeyCode::Char('Z') => {
+                    edit_config(terminal)?;
+                    app.reload_zones();
+                    terminal.clear()?;
+                }
                 KeyCode::Tab | KeyCode::Char('h') | KeyCode::Char('l') => {
                     app.focus = match app.focus {
                         Focus::Zones => Focus::Actions,
@@ -296,7 +356,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 KeyCode::Down | KeyCode::Char('j') => match app.focus {
                     Focus::Zones => {
                         let i = app.zone_state.selected().unwrap_or(0);
-                        app.zone_state.select(Some((i + 1) % ZONES.len()));
+                        app.zone_state.select(Some((i + 1) % app.zones.len()));
                     }
                     Focus::Actions => {
                         let n = app.current_actions().len();
@@ -310,7 +370,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                     Focus::Zones => {
                         let i = app.zone_state.selected().unwrap_or(0);
                         app.zone_state
-                            .select(Some(if i == 0 { ZONES.len() - 1 } else { i - 1 }));
+                            .select(Some(if i == 0 { app.zones.len() - 1 } else { i - 1 }));
                     }
                     Focus::Actions => {
                         let n = app.current_actions().len();
@@ -349,10 +409,10 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
 }
 
 fn ui(f: &mut ratatui::Frame, app: &App) {
-    // Split vertically first: main area + statusbar
+    // Split vertically: main area + status line + shortcuts line
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .constraints([Constraint::Min(0), Constraint::Length(1), Constraint::Length(1)])
         .split(f.area());
 
     // Split main area: zones | gutter (1 col) | actions
@@ -386,12 +446,12 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
     f.render_widget(Paragraph::new(gutter_lines), cols[1]);
 
     // Zones panel — pas de bordure droite (la goutière la remplace)
-    let zone_items: Vec<ListItem> = ZONES
+    let zone_items: Vec<ListItem> = app.zones
         .iter()
         .map(|z| {
             ListItem::new(Line::from(vec![
                 Span::styled(format!("{:<12}", z.name), Style::default().fg(Color::White)),
-                Span::styled(z.path, Style::default().fg(Color::DarkGray)),
+                Span::styled(z.path.clone(), Style::default().fg(Color::DarkGray)),
             ]))
         })
         .collect();
@@ -476,14 +536,69 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
     );
 
     // Status bar
-    let status = app
-        .status
-        .as_deref()
-        .unwrap_or("[Tab] changer focus  [f/Entrée] pick  [q] quit");
+    let status = app.status.as_deref().unwrap_or("");
     f.render_widget(
         Paragraph::new(status).style(Style::default().fg(Color::DarkGray)),
         rows[1],
     );
+
+    f.render_widget(Paragraph::new(shortcuts_hint(app)), rows[2]);
+}
+
+fn shortcuts_hint(app: &App) -> Line<'static> {
+    let key_style = Style::default().fg(Color::Yellow);
+    let dim_style = Style::default().fg(Color::DarkGray);
+
+    let mut parts: Vec<(&'static str, &'static str)> = vec![];
+
+    if app.ffmpeg_child.is_some() {
+        parts.push(("[x]", "cancel encoding"));
+    }
+
+    match app.focus {
+        Focus::Zones => {
+            parts.push(("[j/k]", "navigate"));
+            parts.push(("[Enter/f]", "pick file"));
+            parts.push(("[Tab/l]", "→ actions"));
+        }
+        Focus::Actions => {
+            parts.push(("[j/k]", "navigate"));
+            if app.selected_file.is_some() {
+                for a in app.current_actions() {
+                    parts.push((key_label(a.key), a.label));
+                }
+            } else {
+                parts.push(("[f]", "pick file"));
+            }
+            parts.push(("[Tab/h]", "→ zones"));
+        }
+    }
+
+    parts.push(("[Z]", "config zones"));
+    parts.push(("[q]", "quit"));
+
+    let mut spans: Vec<Span<'static>> = vec![];
+    for (i, (key, label)) in parts.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled("  ", dim_style));
+        }
+        spans.push(Span::styled(*key, key_style));
+        spans.push(Span::styled(format!(" {}", label), dim_style));
+    }
+    Line::from(spans)
+}
+
+fn key_label(k: char) -> &'static str {
+    match k {
+        'o' => "[o]",
+        'p' => "[p]",
+        'e' => "[e]",
+        'd' => "[d]",
+        'c' => "[c]",
+        'n' => "[n]",
+        'r' => "[r]",
+        _ => "[?]",
+    }
 }
 
 
