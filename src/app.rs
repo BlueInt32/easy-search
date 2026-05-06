@@ -99,6 +99,7 @@ impl App {
             "fdfind --hidden --no-ignore {} \
              -E .wine -E .java -E .thunderbird -E .mozilla -E .git -E node_modules -E obj \
              | fzf --border rounded --border-label ' {} ' --border-label-pos 2 \
+                   --header '↑/↓ ctrl+k/j/p/n: Navigate    Enter: Select    Esc/ctrl+c: Cancel' \
                    --preview '~/.config/fzf/preview.sh {{}}' --preview-window=right:50%:border-left \
              > /tmp/ratafzf_result",
             fd_paths, label

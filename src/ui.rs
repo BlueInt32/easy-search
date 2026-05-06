@@ -161,25 +161,23 @@ pub fn shortcuts_hint(app: &App) -> Line<'static> {
 
     match app.focus {
         Focus::Zones => {
-            parts.push(("[j/k]", "navigate"));
-            parts.push(("[Enter/f]", "pick file"));
-            parts.push(("[Tab/l]", "→ actions"));
+            parts.push(("[h/j/k/l/←/↓/↑/→]", "Navigate"));
+            parts.push(("[Enter/f]", "Run search on this zone"));
         }
         Focus::Actions => {
-            parts.push(("[j/k]", "navigate"));
+            parts.push(("[h/j/k/l/←/↓/↑/→]", "Navigate"));
             if app.selected_file.is_some() {
                 for a in app.current_actions() {
                     parts.push((key_label(a.key), a.label));
                 }
             } else {
-                parts.push(("[f]", "pick file"));
+                parts.push(("[f]", "Run search on this zone"));
             }
             parts.push(("[Tab/h]", "→ zones"));
         }
     }
 
-    parts.push(("[Z]", "config zones"));
-    parts.push(("[q]", "quit"));
+    parts.push(("[Z]", "Configure zones"));
 
     let mut spans: Vec<Span<'static>> = vec![];
     for (i, (key, label)) in parts.iter().enumerate() {
