@@ -79,16 +79,43 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 app.reload_zones();
                 terminal.clear()?;
             }
-            AppCommand::SwitchFocus => {
+            AppCommand::FocusNext => {
                 app.focus = match app.focus {
-                    Focus::Zones => Focus::Actions,
+                    Focus::Zones => Focus::History,
+                    Focus::History => Focus::Actions,
                     Focus::Actions => Focus::Zones,
                 };
+                if app.focus == Focus::History {
+                    app.sync_selected_from_history();
+                }
+            }
+            AppCommand::FocusPrev => {
+                app.focus = match app.focus {
+                    Focus::Zones => Focus::Actions,
+                    Focus::History => Focus::Zones,
+                    Focus::Actions => Focus::History,
+                };
+                if app.focus == Focus::History {
+                    app.sync_selected_from_history();
+                }
+            }
+            AppCommand::ClearHistory => app.clear_history(),
+            AppCommand::SelectHistoryItem => {
+                app.select_history_item();
+                if app.cd_target.is_some() { return Ok(()); }
             }
             AppCommand::NavigateDown => match app.focus {
                 Focus::Zones => {
                     let i = app.zone_state.selected().unwrap_or(0);
                     app.zone_state.select(Some((i + 1) % app.zones.len()));
+                }
+                Focus::History => {
+                    let n = app.history.len();
+                    if n > 0 {
+                        let i = app.history_state.selected().unwrap_or(0);
+                        app.history_state.select(Some((i + 1) % n));
+                        app.sync_selected_from_history();
+                    }
                 }
                 Focus::Actions => {
                     let n = app.current_actions().len();
@@ -103,6 +130,14 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                     let i = app.zone_state.selected().unwrap_or(0);
                     app.zone_state
                         .select(Some(if i == 0 { app.zones.len() - 1 } else { i - 1 }));
+                }
+                Focus::History => {
+                    let n = app.history.len();
+                    if n > 0 {
+                        let i = app.history_state.selected().unwrap_or(0);
+                        app.history_state.select(Some(i.saturating_sub(1)));
+                        app.sync_selected_from_history();
+                    }
                 }
                 Focus::Actions => {
                     let n = app.current_actions().len();
@@ -135,9 +170,19 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 app.status = Some("Encodage annulé".to_string());
             }
             AppCommand::StartDrag => app.dragging = true,
+            AppCommand::StartDragRight => app.dragging_right = true,
             AppCommand::MouseDrag(col) => app.zone_width = col.max(10),
-            AppCommand::MouseRelease => app.dragging = false,
-            AppCommand::HoverGutter(hover) => app.hover_gutter = hover,
+            AppCommand::MouseDragRight(col) => {
+                app.history_width = col.saturating_sub(app.zone_width + 1).max(10);
+            }
+            AppCommand::MouseRelease => {
+                app.dragging = false;
+                app.dragging_right = false;
+            }
+            AppCommand::HoverGutter(left, right) => {
+                app.hover_gutter = left;
+                app.hover_right_gutter = right;
+            }
             AppCommand::None => {}
         }
     }

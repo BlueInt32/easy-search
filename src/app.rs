@@ -8,10 +8,40 @@ use std::{
 use crate::actions::{Action, ACTIONS_DIR, ACTIONS_FILE, copy_to_clipboard};
 use crate::zones::{Zone, load_config};
 
+
 #[derive(PartialEq)]
 pub enum Focus {
     Zones,
+    History,
     Actions,
+}
+
+fn history_path() -> PathBuf {
+    dirs_next::config_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join("ratafzf_history")
+}
+
+fn load_history() -> Vec<PathBuf> {
+    let path = history_path();
+    match std::fs::read_to_string(&path) {
+        Ok(content) => content
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(PathBuf::from)
+            .collect(),
+        Err(_) => vec![],
+    }
+}
+
+fn save_history(history: &[PathBuf]) {
+    let path = history_path();
+    let content = history
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let _ = std::fs::write(&path, content);
 }
 
 pub struct App {
@@ -21,13 +51,17 @@ pub struct App {
     pub selected_file: Option<PathBuf>,
     pub action_state: ListState,
     pub history: Vec<PathBuf>,
+    pub history_state: ListState,
     pub status: Option<String>,
     pub ffmpeg_log: Option<String>,
     pub ffmpeg_child: Option<std::process::Child>,
     pub cd_target: Option<PathBuf>,
     pub zone_width: u16,
+    pub history_width: u16,
     pub dragging: bool,
+    pub dragging_right: bool,
     pub hover_gutter: bool,
+    pub hover_right_gutter: bool,
     pub fzf_running: bool,
 }
 
@@ -38,20 +72,32 @@ impl App {
         zone_state.select(Some(0));
         let mut action_state = ListState::default();
         action_state.select(Some(0));
+        let history = load_history();
+        let mut history_state = ListState::default();
+        let selected_file = if !history.is_empty() {
+            history_state.select(Some(0));
+            Some(history[0].clone())
+        } else {
+            None
+        };
         Self {
             focus: Focus::Zones,
             zones: Self::with_all_zone(cfg.zones),
             zone_state,
-            selected_file: None,
+            selected_file,
             action_state,
-            history: vec![],
+            history,
+            history_state,
             status: None,
             ffmpeg_log: None,
             ffmpeg_child: None,
             cd_target: None,
             zone_width: 30,
+            history_width: 40,
             dragging: false,
+            dragging_right: false,
             hover_gutter: false,
+            hover_right_gutter: false,
             fzf_running: false,
         }
     }
@@ -114,11 +160,34 @@ impl App {
             if !path_str.is_empty() {
                 let path = PathBuf::from(&path_str);
                 self.selected_file = Some(path.clone());
-                self.history.push(path);
+                self.history.retain(|p| p != &path);
+                self.history.insert(0, path);
+                self.history_state.select(Some(0));
+                save_history(&self.history);
                 self.action_state.select(Some(0));
                 self.focus = Focus::Actions;
                 self.status = None;
             }
+        }
+    }
+
+    pub fn clear_history(&mut self) {
+        self.history.clear();
+        self.history_state.select(None);
+        self.selected_file = None;
+        save_history(&self.history);
+    }
+
+    pub fn sync_selected_from_history(&mut self) {
+        self.selected_file = self.history_state.selected()
+            .and_then(|i| self.history.get(i))
+            .cloned();
+        self.action_state.select(Some(0));
+    }
+
+    pub fn select_history_item(&mut self) {
+        if self.selected_file.is_some() {
+            self.focus = Focus::Actions;
         }
     }
 

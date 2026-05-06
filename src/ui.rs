@@ -18,6 +18,8 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
         .constraints([
             Constraint::Length(app.zone_width),
             Constraint::Length(1),
+            Constraint::Length(app.history_width),
+            Constraint::Length(1),
             Constraint::Min(0),
         ])
         .split(rows[0]);
@@ -40,6 +42,24 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
         }
     }
     f.render_widget(Paragraph::new(gutter_lines), cols[1]);
+
+    let right_gutter_style = if app.hover_right_gutter || app.dragging_right {
+        Style::default().fg(Color::White)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    let rh = cols[3].height as usize;
+    let mut right_gutter_lines = Vec::with_capacity(rh);
+    if rh > 0 {
+        right_gutter_lines.push(Line::from(Span::styled("┬", right_gutter_style)));
+        for _ in 1..rh.saturating_sub(1) {
+            right_gutter_lines.push(Line::from(Span::styled("│", right_gutter_style)));
+        }
+        if rh > 1 {
+            right_gutter_lines.push(Line::from(Span::styled("┴", right_gutter_style)));
+        }
+    }
+    f.render_widget(Paragraph::new(right_gutter_lines), cols[3]);
 
     let zone_items: Vec<ListItem> = app.zones
         .iter()
@@ -75,6 +95,68 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
         cols[0],
         &mut zone_state,
     );
+
+    let history_focus = app.focus == Focus::History && !app.fzf_running;
+    let history_items: Vec<ListItem> = app.history
+        .iter()
+        .map(|p| {
+            let filename = p.file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let parent = p.parent()
+                .map(|par| par.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            ListItem::new(Line::from(vec![
+                Span::styled(format!("{:<20}", filename), Style::default().fg(Color::White)),
+                Span::styled(parent, Style::default().fg(Color::DarkGray)),
+            ]))
+        })
+        .collect();
+
+    let mut history_state = app.history_state.clone();
+    if app.history.is_empty() {
+        f.render_widget(
+            List::new(vec![
+                ListItem::new(Line::default()),
+                ListItem::new(Span::styled(
+                    "press [f] to search files",
+                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+                )),
+            ])
+            .block(
+                Block::default()
+                    .borders(Borders::TOP | Borders::BOTTOM)
+                    .title(Span::styled("History", if history_focus {
+                        Style::default().fg(Color::Yellow)
+                    } else {
+                        Style::default()
+                    }))
+                    .border_style(Style::default().fg(Color::DarkGray)),
+            ),
+            cols[2],
+        );
+    } else {
+        f.render_stateful_widget(
+            List::new(history_items)
+                .block(
+                    Block::default()
+                        .borders(Borders::TOP | Borders::BOTTOM)
+                        .title(Span::styled("History", if history_focus {
+                            Style::default().fg(Color::Yellow)
+                        } else {
+                            Style::default()
+                        }))
+                        .border_style(Style::default().fg(Color::DarkGray)),
+                )
+                .highlight_style(if history_focus {
+                    Style::default().add_modifier(Modifier::REVERSED)
+                } else {
+                    Style::default()
+                }),
+            cols[2],
+            &mut history_state,
+        );
+    }
 
     let actions_focus = app.focus == Focus::Actions && !app.fzf_running;
     let panel_title = app
@@ -127,7 +209,7 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
             } else {
                 Style::default()
             }),
-        cols[2],
+        cols[4],
         &mut action_state,
     );
 
@@ -163,11 +245,21 @@ pub fn shortcuts_hint(app: &App) -> Line<'static> {
 
     match app.focus {
         Focus::Zones => {
-            parts.push(("[h/j/k/l/←/↓/↑/→]", "Navigate"));
+            parts.push(("[j/k]", "Navigate"));
             parts.push(("[Enter/f]", "Run search on this zone"));
+            parts.push(("[Tab/l]", "→ history"));
+        }
+        Focus::History => {
+            parts.push(("[j/k]", "Navigate"));
+            if !app.history.is_empty() {
+                parts.push(("[Enter]", "Select"));
+                parts.push(("[x]", "Clear history"));
+            }
+            parts.push(("[Tab/l]", "→ actions"));
+            parts.push(("[h]", "→ zones"));
         }
         Focus::Actions => {
-            parts.push(("[h/j/k/l/←/↓/↑/→]", "Navigate"));
+            parts.push(("[j/k]", "Navigate"));
             if app.selected_file.is_some() {
                 for a in app.current_actions() {
                     parts.push((key_label(a.key), a.label));
@@ -175,7 +267,8 @@ pub fn shortcuts_hint(app: &App) -> Line<'static> {
             } else {
                 parts.push(("[f]", "Run search on this zone"));
             }
-            parts.push(("[Tab/h]", "→ zones"));
+            parts.push(("[Tab/l]", "→ zones"));
+            parts.push(("[h]", "→ history"));
         }
     }
 
