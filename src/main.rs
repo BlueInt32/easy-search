@@ -1,13 +1,13 @@
 mod actions;
 mod app;
 mod ffmpeg;
+mod input;
 mod ui;
 mod zones;
 
 use anyhow::Result;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind},
-    event::{DisableMouseCapture, EnableMouseCapture},
+    event::{self, DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -16,6 +16,7 @@ use std::{io, process::Command, time::Duration};
 
 use app::{App, Focus};
 use ffmpeg::ffmpeg_last_line;
+use input::AppCommand;
 use ui::ui;
 use zones::config_path;
 
@@ -64,109 +65,77 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
             continue;
         }
 
-        match event::read()? {
-            Event::Mouse(mouse) => {
-                match mouse.kind {
-                    MouseEventKind::Down(MouseButton::Left) => {
-                        if mouse.column == app.zone_width {
-                            app.dragging = true;
-                        }
-                    }
-                    MouseEventKind::Drag(MouseButton::Left) => {
-                        if app.dragging {
-                            app.zone_width = mouse.column.max(10);
-                        }
-                    }
-                    MouseEventKind::Up(MouseButton::Left) => {
-                        app.dragging = false;
-                    }
-                    MouseEventKind::Moved => {
-                        app.hover_gutter = mouse.column == app.zone_width;
-                    }
-                    _ => {}
-                }
-                continue;
+        match input::handle_event(event::read()?, app) {
+            AppCommand::Quit => return Ok(()),
+            AppCommand::OpenPicker => {
+                let cmd = app.fzf_cmd();
+                open_picker(terminal, app, &cmd)?;
             }
-            Event::Key(key) => {
-                if key.kind != KeyEventKind::Press {
-                    continue;
-                }
-                match key.code {
-                    KeyCode::Char('x') if app.ffmpeg_child.is_some() => {
-                        if let Some(mut child) = app.ffmpeg_child.take() {
-                            let _ = child.kill();
-                        }
-                        app.ffmpeg_log = None;
-                        app.status = Some("Encodage annulé".to_string());
-                    }
-                    KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Char('Z') => {
-                        edit_config(terminal)?;
-                        app.reload_zones();
-                        terminal.clear()?;
-                    }
-                    KeyCode::Tab | KeyCode::Char('h') | KeyCode::Char('l') => {
-                        app.focus = match app.focus {
-                            Focus::Zones => Focus::Actions,
-                            Focus::Actions => Focus::Zones,
-                        };
-                    }
-                    KeyCode::Char('f') => {
-                        let cmd = app.fzf_cmd();
-                        open_picker(terminal, app, &cmd)?;
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => match app.focus {
-                        Focus::Zones => {
-                            let i = app.zone_state.selected().unwrap_or(0);
-                            app.zone_state.select(Some((i + 1) % app.zones.len()));
-                        }
-                        Focus::Actions => {
-                            let n = app.current_actions().len();
-                            if n > 0 {
-                                let i = app.action_state.selected().unwrap_or(0);
-                                app.action_state.select(Some((i + 1) % n));
-                            }
-                        }
-                    },
-                    KeyCode::Up | KeyCode::Char('k') => match app.focus {
-                        Focus::Zones => {
-                            let i = app.zone_state.selected().unwrap_or(0);
-                            app.zone_state
-                                .select(Some(if i == 0 { app.zones.len() - 1 } else { i - 1 }));
-                        }
-                        Focus::Actions => {
-                            let n = app.current_actions().len();
-                            if n > 0 {
-                                let i = app.action_state.selected().unwrap_or(0);
-                                app.action_state.select(Some(i.saturating_sub(1)));
-                            }
-                        }
-                    },
-                    KeyCode::Enter => match app.focus {
-                        Focus::Zones => {
-                            let cmd = app.fzf_cmd();
-                            open_picker(terminal, app, &cmd)?;
-                        }
-                        Focus::Actions => {
-                            let idx = app.action_state.selected().unwrap_or(0);
-                            let actions = app.current_actions().to_vec();
-                            if let Some(action) = actions.get(idx) {
-                                let _ = app.run_action(action);
-                            }
-                            if app.cd_target.is_some() { return Ok(()); }
-                        }
-                    },
-                    KeyCode::Char(c) if app.focus == Focus::Actions => {
-                        let actions = app.current_actions().to_vec();
-                        if let Some(action) = actions.iter().find(|a| a.key == c) {
-                            let _ = app.run_action(action);
-                        }
-                        if app.cd_target.is_some() { return Ok(()); }
-                    }
-                    _ => {}
-                }
+            AppCommand::EditConfig => {
+                edit_config(terminal)?;
+                app.reload_zones();
+                terminal.clear()?;
             }
-            _ => {}
+            AppCommand::SwitchFocus => {
+                app.focus = match app.focus {
+                    Focus::Zones => Focus::Actions,
+                    Focus::Actions => Focus::Zones,
+                };
+            }
+            AppCommand::NavigateDown => match app.focus {
+                Focus::Zones => {
+                    let i = app.zone_state.selected().unwrap_or(0);
+                    app.zone_state.select(Some((i + 1) % app.zones.len()));
+                }
+                Focus::Actions => {
+                    let n = app.current_actions().len();
+                    if n > 0 {
+                        let i = app.action_state.selected().unwrap_or(0);
+                        app.action_state.select(Some((i + 1) % n));
+                    }
+                }
+            },
+            AppCommand::NavigateUp => match app.focus {
+                Focus::Zones => {
+                    let i = app.zone_state.selected().unwrap_or(0);
+                    app.zone_state
+                        .select(Some(if i == 0 { app.zones.len() - 1 } else { i - 1 }));
+                }
+                Focus::Actions => {
+                    let n = app.current_actions().len();
+                    if n > 0 {
+                        let i = app.action_state.selected().unwrap_or(0);
+                        app.action_state.select(Some(i.saturating_sub(1)));
+                    }
+                }
+            },
+            AppCommand::RunSelectedAction => {
+                let idx = app.action_state.selected().unwrap_or(0);
+                let actions = app.current_actions().to_vec();
+                if let Some(action) = actions.get(idx) {
+                    let _ = app.run_action(action);
+                }
+                if app.cd_target.is_some() { return Ok(()); }
+            }
+            AppCommand::RunActionByKey(c) => {
+                let actions = app.current_actions().to_vec();
+                if let Some(action) = actions.iter().find(|a| a.key == c) {
+                    let _ = app.run_action(action);
+                }
+                if app.cd_target.is_some() { return Ok(()); }
+            }
+            AppCommand::CancelEncoding => {
+                if let Some(mut child) = app.ffmpeg_child.take() {
+                    let _ = child.kill();
+                }
+                app.ffmpeg_log = None;
+                app.status = Some("Encodage annulé".to_string());
+            }
+            AppCommand::StartDrag => app.dragging = true,
+            AppCommand::MouseDrag(col) => app.zone_width = col.max(10),
+            AppCommand::MouseRelease => app.dragging = false,
+            AppCommand::HoverGutter(hover) => app.hover_gutter = hover,
+            AppCommand::None => {}
         }
     }
 }
