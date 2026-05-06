@@ -27,7 +27,10 @@ fn open_picker(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut 
         Command::new("tmux")
             .args(["split-window", "-v", "-l", "70%", "sh", "-c", &full_cmd])
             .status()?;
+        app.fzf_running = true;
+        terminal.draw(|f| ui(f, app))?;
         Command::new("tmux").args(["wait-for", "ratafzf-done"]).status()?;
+        app.fzf_running = false;
     } else {
         disable_raw_mode()?;
         execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;

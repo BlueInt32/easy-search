@@ -51,7 +51,7 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
         })
         .collect();
 
-    let zones_focus = app.focus == Focus::Zones;
+    let zones_focus = app.focus == Focus::Zones && !app.fzf_running;
     let mut zone_state = app.zone_state.clone();
     f.render_stateful_widget(
         List::new(zone_items)
@@ -65,7 +65,9 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
                     }))
                     .border_style(Style::default().fg(Color::DarkGray)),
             )
-            .highlight_style(if zones_focus {
+            .highlight_style(if app.fzf_running {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else if zones_focus {
                 Style::default().add_modifier(Modifier::REVERSED)
             } else {
                 Style::default()
@@ -74,7 +76,7 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
         &mut zone_state,
     );
 
-    let actions_focus = app.focus == Focus::Actions;
+    let actions_focus = app.focus == Focus::Actions && !app.fzf_running;
     let panel_title = app
         .selected_file
         .as_ref()

@@ -28,6 +28,7 @@ pub struct App {
     pub zone_width: u16,
     pub dragging: bool,
     pub hover_gutter: bool,
+    pub fzf_running: bool,
 }
 
 impl App {
@@ -51,6 +52,7 @@ impl App {
             zone_width: 30,
             dragging: false,
             hover_gutter: false,
+            fzf_running: false,
         }
     }
 
@@ -98,7 +100,7 @@ impl App {
         format!(
             "fdfind --hidden --no-ignore {} \
              -E .wine -E .java -E .thunderbird -E .mozilla -E .git -E node_modules -E obj \
-             | fzf --border rounded --border-label ' {} ' --border-label-pos 2 \
+             | fzf --border rounded --border-label ' {} ' --border-label-pos 2 --color 'label:yellow' \
                    --header '↑/↓ ctrl+k/j/p/n: Navigate    Enter: Select    Esc/ctrl+c: Cancel' \
                    --preview '~/.config/fzf/preview.sh {{}}' --preview-window=right:50%:border-left \
              > /tmp/ratafzf_result",
