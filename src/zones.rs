@@ -26,11 +26,12 @@ pub fn load_config() -> Config {
             return cfg;
         }
     }
+    let home = dirs_next::home_dir()
+        .unwrap_or_else(|| PathBuf::from("~"))
+        .to_string_lossy()
+        .into_owned();
     let default = Config {
-        zones: vec![
-            Zone { name: "home".into(),    path: "/home/user".into() },
-            Zone { name: "musique".into(), path: "/mnt/WIN_E/Musique/".into() },
-        ],
+        zones: vec![Zone { name: "~".into(), path: home }],
     };
     let _ = save_config(&default);
     default
