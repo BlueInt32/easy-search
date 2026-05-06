@@ -14,7 +14,7 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{io, process::Command, time::Duration};
 
-use app::{App, Focus};
+use app::{App, Focus, HistoryConfirm};
 use ffmpeg::ffmpeg_last_line;
 use input::AppCommand;
 use ui::ui;
@@ -99,7 +99,16 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                     app.sync_selected_from_history();
                 }
             }
-            AppCommand::ClearHistory => app.clear_history(),
+            AppCommand::AskDeleteEntry => app.history_confirm = Some(HistoryConfirm::DeleteEntry),
+            AppCommand::AskClearAll => app.history_confirm = Some(HistoryConfirm::ClearAll),
+            AppCommand::ConfirmHistoryAction => {
+                match app.history_confirm.take() {
+                    Some(HistoryConfirm::DeleteEntry) => app.delete_selected_history_entry(),
+                    Some(HistoryConfirm::ClearAll) => app.clear_history(),
+                    None => {}
+                }
+            }
+            AppCommand::CancelHistoryAction => { app.history_confirm = None; }
             AppCommand::SelectHistoryItem => {
                 app.select_history_item();
                 if app.cd_target.is_some() { return Ok(()); }

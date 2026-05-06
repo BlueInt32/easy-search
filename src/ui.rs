@@ -1,11 +1,11 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
 };
 
-use crate::app::{App, Focus};
+use crate::app::{App, Focus, HistoryConfirm};
 
 pub fn ui(f: &mut ratatui::Frame, app: &App) {
     let rows = Layout::default()
@@ -231,6 +231,40 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
     );
 
     f.render_widget(Paragraph::new(shortcuts_hint(app)), rows[2]);
+
+    if let Some(ref confirm) = app.history_confirm {
+        let question = match confirm {
+            HistoryConfirm::DeleteEntry => " Delete this history entry?",
+            HistoryConfirm::ClearAll => " Clear all history?",
+        };
+        let area = centered_rect(46, 6, f.area());
+        f.render_widget(Clear, area);
+        f.render_widget(
+            Paragraph::new(vec![
+                Line::default(),
+                Line::from(Span::styled(question, Style::default().fg(Color::White))),
+                Line::default(),
+                Line::from(vec![
+                    Span::styled(" y or Enter", Style::default().fg(Color::Yellow)),
+                    Span::styled(" to confirm  ·  ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("any other key", Style::default().fg(Color::Yellow)),
+                    Span::styled(" to cancel", Style::default().fg(Color::DarkGray)),
+                ]),
+            ])
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Yellow)),
+            ),
+            area,
+        );
+    }
+}
+
+fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
+    let x = r.x + r.width.saturating_sub(width) / 2;
+    let y = r.y + r.height.saturating_sub(height) / 2;
+    Rect::new(x, y, width.min(r.width), height.min(r.height))
 }
 
 pub fn shortcuts_hint(app: &App) -> Line<'static> {
@@ -253,7 +287,8 @@ pub fn shortcuts_hint(app: &App) -> Line<'static> {
             parts.push(("[j/k]", "Navigate"));
             if !app.history.is_empty() {
                 parts.push(("[Enter]", "Select"));
-                parts.push(("[x]", "Clear history"));
+                parts.push(("[x]", "Delete entry"));
+                parts.push(("[X]", "Clear all"));
             }
             parts.push(("[Tab/l]", "→ actions"));
             parts.push(("[h]", "→ zones"));

@@ -8,6 +8,11 @@ use std::{
 use crate::actions::{Action, ACTIONS_DIR, ACTIONS_FILE, copy_to_clipboard};
 use crate::zones::{Zone, load_config};
 
+pub enum HistoryConfirm {
+    DeleteEntry,
+    ClearAll,
+}
+
 
 #[derive(PartialEq)]
 pub enum Focus {
@@ -63,6 +68,7 @@ pub struct App {
     pub hover_gutter: bool,
     pub hover_right_gutter: bool,
     pub fzf_running: bool,
+    pub history_confirm: Option<HistoryConfirm>,
 }
 
 impl App {
@@ -99,6 +105,7 @@ impl App {
             hover_gutter: false,
             hover_right_gutter: false,
             fzf_running: false,
+            history_confirm: None,
         }
     }
 
@@ -176,6 +183,23 @@ impl App {
         self.history_state.select(None);
         self.selected_file = None;
         save_history(&self.history);
+    }
+
+    pub fn delete_selected_history_entry(&mut self) {
+        if let Some(i) = self.history_state.selected() {
+            if i < self.history.len() {
+                self.history.remove(i);
+                save_history(&self.history);
+                if self.history.is_empty() {
+                    self.history_state.select(None);
+                    self.selected_file = None;
+                } else {
+                    let new_i = i.min(self.history.len() - 1);
+                    self.history_state.select(Some(new_i));
+                    self.sync_selected_from_history();
+                }
+            }
+        }
     }
 
     pub fn sync_selected_from_history(&mut self) {

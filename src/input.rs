@@ -13,7 +13,10 @@ pub enum AppCommand {
     RunSelectedAction,
     RunActionByKey(char),
     CancelEncoding,
-    ClearHistory,
+    AskDeleteEntry,
+    AskClearAll,
+    ConfirmHistoryAction,
+    CancelHistoryAction,
     SelectHistoryItem,
     StartDrag,
     StartDragRight,
@@ -33,9 +36,16 @@ pub fn handle_event(event: Event, app: &App) -> AppCommand {
 }
 
 fn handle_key(code: KeyCode, app: &App) -> AppCommand {
+    if app.history_confirm.is_some() {
+        return match code {
+            KeyCode::Char('y') | KeyCode::Enter => AppCommand::ConfirmHistoryAction,
+            _ => AppCommand::CancelHistoryAction,
+        };
+    }
     match code {
         KeyCode::Char('x') if app.ffmpeg_child.is_some() => AppCommand::CancelEncoding,
-        KeyCode::Char('x') if app.focus == Focus::History => AppCommand::ClearHistory,
+        KeyCode::Char('x') if app.focus == Focus::History => AppCommand::AskDeleteEntry,
+        KeyCode::Char('X') if app.focus == Focus::History => AppCommand::AskClearAll,
         KeyCode::Char('q') => AppCommand::Quit,
         KeyCode::Char('Z') => AppCommand::EditConfig,
         KeyCode::Tab | KeyCode::Char('l') | KeyCode::Right => AppCommand::FocusNext,
