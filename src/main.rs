@@ -119,7 +119,7 @@ impl App {
         action_state.select(Some(0));
         Self {
             focus: Focus::Zones,
-            zones: cfg.zones,
+            zones: Self::with_all_zone(cfg.zones),
             zone_state,
             selected_file: None,
             action_state,
@@ -139,10 +139,15 @@ impl App {
         self.zones.get(i).map(|z| z.path.as_str()).unwrap_or("/home/user")
     }
 
+    fn with_all_zone(mut zones: Vec<Zone>) -> Vec<Zone> {
+        zones.insert(0, Zone { name: "all".into(), path: "*".into() });
+        zones
+    }
+
     fn reload_zones(&mut self) {
         let cfg = load_config();
         let prev = self.zone_state.selected().unwrap_or(0);
-        self.zones = cfg.zones;
+        self.zones = Self::with_all_zone(cfg.zones);
         self.zone_state.select(Some(prev.min(self.zones.len().saturating_sub(1))));
     }
 
@@ -153,14 +158,30 @@ impl App {
         }
     }
 
+    fn is_all_zone_selected(&self) -> bool {
+        let i = self.zone_state.selected().unwrap_or(0);
+        self.zones.get(i).map(|z| z.path == "*").unwrap_or(false)
+    }
+
     fn fzf_cmd(&self) -> String {
+        let zone_path = self.current_zone_path();
+        let (fd_paths, label) = if zone_path == "*" {
+            let paths = self.zones.iter()
+                .filter(|z| z.path != "*")
+                .map(|z| format!("--search-path '{}'", z.path))
+                .collect::<Vec<_>>()
+                .join(" ");
+            (paths, "All zones")
+        } else {
+            (format!("--search-path '{}'", zone_path), "Pick")
+        };
         format!(
-            "fdfind --hidden --no-ignore --search-path '{}' \
+            "fdfind --hidden --no-ignore {} \
              -E .wine -E .java -E .thunderbird -E .mozilla -E .git -E node_modules -E obj \
-             | fzf --border rounded --border-label ' Pick ' --border-label-pos 2 \
+             | fzf --border rounded --border-label ' {} ' --border-label-pos 2 \
                    --preview '~/.config/fzf/preview.sh {{}}' --preview-window=right:50%:border-left \
              > /tmp/ratafzf_result",
-            self.current_zone_path()
+            fd_paths, label
         )
     }
 
@@ -258,18 +279,18 @@ fn ffmpeg_last_line(log_path: &str) -> Option<String> {
 }
 
 
-fn open_picker(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<()> {
+fn open_picker(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App, cmd: &str) -> Result<()> {
     let _ = std::fs::remove_file("/tmp/ratafzf_result");
     if std::env::var("TMUX").is_ok() {
-        let cmd = format!("{}; tmux wait-for -S ratafzf-done", app.fzf_cmd());
+        let full_cmd = format!("{}; tmux wait-for -S ratafzf-done", cmd);
         Command::new("tmux")
-            .args(["split-window", "-v", "-l", "70%", "sh", "-c", &cmd])
+            .args(["split-window", "-v", "-l", "70%", "sh", "-c", &full_cmd])
             .status()?;
         Command::new("tmux").args(["wait-for", "ratafzf-done"]).status()?;
     } else {
         disable_raw_mode()?;
         execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
-        Command::new("sh").args(["-c", &app.fzf_cmd()]).status()?;
+        Command::new("sh").args(["-c", cmd]).status()?;
         enable_raw_mode()?;
         execute!(terminal.backend_mut(), EnterAlternateScreen, EnableMouseCapture)?;
     }
@@ -351,7 +372,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                     };
                 }
                 KeyCode::Char('f') => {
-                    open_picker(terminal, app)?;
+                    let cmd = app.fzf_cmd();
+                    open_picker(terminal, app, &cmd)?;
                 }
                 KeyCode::Down | KeyCode::Char('j') => match app.focus {
                     Focus::Zones => {
@@ -382,7 +404,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 },
                 KeyCode::Enter => match app.focus {
                     Focus::Zones => {
-                        open_picker(terminal, app)?;
+                        let cmd = app.fzf_cmd();
+                        open_picker(terminal, app, &cmd)?;
                     }
                     Focus::Actions => {
                         let idx = app.action_state.selected().unwrap_or(0);
@@ -536,7 +559,18 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
     );
 
     // Status bar
-    let status = app.status.as_deref().unwrap_or("");
+    let all_zones_hint = if app.is_all_zone_selected() {
+        let names: Vec<&str> = app.zones.iter()
+            .filter(|z| z.path != "*")
+            .map(|z| z.name.as_str())
+            .collect();
+        Some(format!("All zones: {}", names.join(", ")))
+    } else {
+        None
+    };
+    let status = all_zones_hint.as_deref()
+        .or(app.status.as_deref())
+        .unwrap_or("");
     f.render_widget(
         Paragraph::new(status).style(Style::default().fg(Color::DarkGray)),
         rows[1],
