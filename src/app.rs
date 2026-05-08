@@ -1,12 +1,45 @@
 use anyhow::Result;
 use ratatui::widgets::ListState;
-use std::{
-    path::PathBuf,
-    process::{Command, Stdio},
-};
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
 
-use crate::actions::{Action, ACTIONS_DIR, ACTIONS_FILE, copy_to_clipboard};
+use crate::actions::{Action, ACTIONS_DIR, ACTIONS_FILE, FFMPEG_SUBACTIONS, copy_to_clipboard};
 use crate::zones::{Zone, load_config};
+
+fn shell_escape(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+fn build_ffmpeg_command(path: &std::path::Path, key: char) -> Option<String> {
+    let stem = path.file_stem()?.to_string_lossy().to_string();
+    match key {
+        'e' => {
+            let output = path.with_file_name(format!("{}-reenc.mp4", stem));
+            Some(format!(
+                "ffmpeg -i {} -c:v libx264 -crf 18 -preset slow -c:a copy {}",
+                shell_escape(&path.to_string_lossy()),
+                shell_escape(&output.to_string_lossy()),
+            ))
+        }
+        'a' => {
+            let output = path.with_file_name(format!("{}.mp3", stem));
+            Some(format!(
+                "ffmpeg -i {} -vn -c:a libmp3lame -q:a 2 {}",
+                shell_escape(&path.to_string_lossy()),
+                shell_escape(&output.to_string_lossy()),
+            ))
+        }
+        _ => None,
+    }
+}
+
+fn build_ffmpeg_preview(key: char) -> Option<&'static str> {
+    match key {
+        'e' => Some("ffmpeg -i {inputFile} -c:v libx264 -crf 18 -preset slow -c:a copy {outputFile}"),
+        'a' => Some("ffmpeg -i {inputFile} -vn -c:a libmp3lame -q:a 2 {outputFile}"),
+        _ => None,
+    }
+}
 
 pub enum HistoryConfirm {
     DeleteEntry,
@@ -58,8 +91,6 @@ pub struct App {
     pub history: Vec<PathBuf>,
     pub history_state: ListState,
     pub status: Option<String>,
-    pub ffmpeg_log: Option<String>,
-    pub ffmpeg_child: Option<std::process::Child>,
     pub cd_target: Option<PathBuf>,
     pub zone_width: u16,
     pub history_width: u16,
@@ -69,6 +100,8 @@ pub struct App {
     pub hover_right_gutter: bool,
     pub fzf_running: bool,
     pub history_confirm: Option<HistoryConfirm>,
+    pub ffmpeg_submenu: bool,
+    pub ffmpeg_submenu_idx: usize,
 }
 
 impl App {
@@ -95,8 +128,6 @@ impl App {
             history,
             history_state,
             status: None,
-            ffmpeg_log: None,
-            ffmpeg_child: None,
             cd_target: None,
             zone_width: 30,
             history_width: 40,
@@ -106,6 +137,8 @@ impl App {
             hover_right_gutter: false,
             fzf_running: false,
             history_confirm: None,
+            ffmpeg_submenu: false,
+            ffmpeg_submenu_idx: 0,
         }
     }
 
@@ -249,21 +282,8 @@ impl App {
                 self.status = Some("Nom copié".to_string());
             }
             'r' => {
-                let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
-                let output = path.with_file_name(format!("{}-reenc.mp4", stem));
-                let log_path = "/tmp/ratafzf_ffmpeg.log";
-                let log_file = std::fs::File::create(log_path)?;
-                let child = Command::new("ffmpeg")
-                    .args([
-                        "-i", &path.to_string_lossy(),
-                        "-c:v", "libx264", "-crf", "18", "-preset", "slow",
-                        "-c:a", "copy", &output.to_string_lossy(),
-                    ])
-                    .stdout(Stdio::null()).stderr(log_file)
-                    .spawn()?;
-                self.ffmpeg_child = Some(child);
-                self.ffmpeg_log = Some(log_path.to_string());
-                self.status = Some(format!("Encoding → {}", output.display()));
+                self.ffmpeg_submenu = true;
+                self.ffmpeg_submenu_idx = 0;
             }
             'p' => {
                 let parent = path.parent().unwrap_or(&path).to_path_buf();
@@ -272,6 +292,24 @@ impl App {
                 self.status = Some(format!("Opened {}", parent.display()));
             }
             _ => {}
+        }
+        Ok(())
+    }
+
+    pub fn ffmpeg_subaction_preview(&self) -> Option<&'static str> {
+        let key = FFMPEG_SUBACTIONS.get(self.ffmpeg_submenu_idx)?.key;
+        build_ffmpeg_preview(key)
+    }
+
+    pub fn run_ffmpeg_subaction(&mut self, key: char) -> Result<()> {
+        let path = match &self.selected_file {
+            Some(p) => p.clone(),
+            None => return Ok(()),
+        };
+        if let Some(cmd) = build_ffmpeg_command(&path, key) {
+            copy_to_clipboard(&cmd)?;
+            self.status = Some("Commande ffmpeg copiée".to_string());
+            self.ffmpeg_submenu = false;
         }
         Ok(())
     }

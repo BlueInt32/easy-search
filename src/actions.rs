@@ -14,7 +14,12 @@ pub const ACTIONS_FILE: &[Action] = &[
     Action { key: 'd', label: "cd" },
     Action { key: 'c', label: "copy path" },
     Action { key: 'n', label: "copy filename" },
-    Action { key: 'r', label: "reenc" },
+    Action { key: 'r', label: "ffmpeg" },
+];
+
+pub const FFMPEG_SUBACTIONS: &[Action] = &[
+    Action { key: 'e', label: "encode to mp4 (good quality)" },
+    Action { key: 'a', label: "extract audio" },
 ];
 
 pub const ACTIONS_DIR: &[Action] = &[

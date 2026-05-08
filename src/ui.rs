@@ -2,9 +2,10 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph},
 };
 
+use crate::actions::FFMPEG_SUBACTIONS;
 use crate::app::{App, Focus, HistoryConfirm};
 
 pub fn ui(f: &mut ratatui::Frame, app: &App) {
@@ -17,49 +18,10 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
         .direction(Direction::Horizontal)
         .constraints([
             Constraint::Length(app.zone_width),
-            Constraint::Length(1),
             Constraint::Length(app.history_width),
-            Constraint::Length(1),
             Constraint::Min(0),
         ])
         .split(rows[0]);
-
-    let gutter_style = if app.hover_gutter || app.dragging {
-        Style::default().fg(Color::White)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-
-    let h = cols[1].height as usize;
-    let mut gutter_lines = Vec::with_capacity(h);
-    if h > 0 {
-        gutter_lines.push(Line::from(Span::styled("┬", gutter_style)));
-        for _ in 1..h.saturating_sub(1) {
-            gutter_lines.push(Line::from(Span::styled("│", gutter_style)));
-        }
-        if h > 1 {
-            gutter_lines.push(Line::from(Span::styled("┴", gutter_style)));
-        }
-    }
-    f.render_widget(Paragraph::new(gutter_lines), cols[1]);
-
-    let right_gutter_style = if app.hover_right_gutter || app.dragging_right {
-        Style::default().fg(Color::White)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-    let rh = cols[3].height as usize;
-    let mut right_gutter_lines = Vec::with_capacity(rh);
-    if rh > 0 {
-        right_gutter_lines.push(Line::from(Span::styled("┬", right_gutter_style)));
-        for _ in 1..rh.saturating_sub(1) {
-            right_gutter_lines.push(Line::from(Span::styled("│", right_gutter_style)));
-        }
-        if rh > 1 {
-            right_gutter_lines.push(Line::from(Span::styled("┴", right_gutter_style)));
-        }
-    }
-    f.render_widget(Paragraph::new(right_gutter_lines), cols[3]);
 
     let zone_items: Vec<ListItem> = app.zones
         .iter()
@@ -72,18 +34,29 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
         .collect();
 
     let zones_focus = app.focus == Focus::Zones && !app.fzf_running;
+    let zones_border_style = if app.hover_gutter || app.dragging {
+        Style::default().fg(Color::White)
+    } else if zones_focus {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
     let mut zone_state = app.zone_state.clone();
     f.render_stateful_widget(
         List::new(zone_items)
             .block(
                 Block::default()
-                    .borders(Borders::LEFT | Borders::TOP | Borders::BOTTOM)
-                    .title(Span::styled("Zones", if zones_focus {
-                        Style::default().fg(Color::Yellow)
-                    } else {
-                        Style::default()
-                    }))
-                    .border_style(Style::default().fg(Color::DarkGray)),
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .title(Line::from(vec![
+                        Span::styled("─", zones_border_style),
+                        Span::styled("Zones", if zones_focus {
+                            Style::default().fg(Color::Yellow)
+                        } else {
+                            Style::default()
+                        }),
+                    ]))
+                    .border_style(zones_border_style),
             )
             .highlight_style(if app.fzf_running {
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -97,6 +70,13 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
     );
 
     let history_focus = app.focus == Focus::History && !app.fzf_running;
+    let history_border_style = if app.hover_right_gutter || app.dragging_right {
+        Style::default().fg(Color::White)
+    } else if history_focus {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
     let history_items: Vec<ListItem> = app.history
         .iter()
         .map(|p| {
@@ -125,40 +105,53 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
             ])
             .block(
                 Block::default()
-                    .borders(Borders::TOP | Borders::BOTTOM)
-                    .title(Span::styled("History", if history_focus {
-                        Style::default().fg(Color::Yellow)
-                    } else {
-                        Style::default()
-                    }))
-                    .border_style(Style::default().fg(Color::DarkGray)),
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .title(Line::from(vec![
+                        Span::styled("─", history_border_style),
+                        Span::styled("History", if history_focus {
+                            Style::default().fg(Color::Yellow)
+                        } else {
+                            Style::default()
+                        }),
+                    ]))
+                    .border_style(history_border_style),
             ),
-            cols[2],
+            cols[1],
         );
     } else {
         f.render_stateful_widget(
             List::new(history_items)
                 .block(
                     Block::default()
-                        .borders(Borders::TOP | Borders::BOTTOM)
-                        .title(Span::styled("History", if history_focus {
-                            Style::default().fg(Color::Yellow)
-                        } else {
-                            Style::default()
-                        }))
-                        .border_style(Style::default().fg(Color::DarkGray)),
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded)
+                        .title(Line::from(vec![
+                            Span::styled("─", history_border_style),
+                            Span::styled("History", if history_focus {
+                                Style::default().fg(Color::Yellow)
+                            } else {
+                                Style::default()
+                            }),
+                        ]))
+                        .border_style(history_border_style),
                 )
                 .highlight_style(if history_focus {
                     Style::default().add_modifier(Modifier::REVERSED)
                 } else {
                     Style::default()
                 }),
-            cols[2],
+            cols[1],
             &mut history_state,
         );
     }
 
     let actions_focus = app.focus == Focus::Actions && !app.fzf_running;
+    let actions_border_style = if actions_focus {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
     let panel_title = app
         .selected_file
         .as_ref()
@@ -196,20 +189,24 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
         List::new(items)
             .block(
                 Block::default()
-                    .borders(Borders::RIGHT | Borders::TOP | Borders::BOTTOM)
-                    .title(Span::styled(panel_title, if actions_focus {
-                        Style::default().fg(Color::Yellow)
-                    } else {
-                        Style::default()
-                    }))
-                    .border_style(Style::default().fg(Color::DarkGray)),
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .title(Line::from(vec![
+                        Span::styled("─", actions_border_style),
+                        Span::styled(panel_title, if actions_focus {
+                            Style::default().fg(Color::Yellow)
+                        } else {
+                            Style::default()
+                        }),
+                    ]))
+                    .border_style(actions_border_style),
             )
             .highlight_style(if actions_focus && !no_file {
                 Style::default().add_modifier(Modifier::REVERSED)
             } else {
                 Style::default()
             }),
-        cols[4],
+        cols[2],
         &mut action_state,
     );
 
@@ -232,12 +229,60 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
 
     f.render_widget(Paragraph::new(shortcuts_hint(app)), rows[2]);
 
+    if app.ffmpeg_submenu {
+        let preview = app.ffmpeg_subaction_preview().unwrap_or("");
+        let popup_h = FFMPEG_SUBACTIONS.len() as u16 + 8;
+        let mut area = centered_rect(90, popup_h, f.area());
+        area.y = area.y.saturating_sub(4);
+        f.render_widget(Clear, area);
+        let mut lines = vec![Line::default()];
+        for (i, action) in FFMPEG_SUBACTIONS.iter().enumerate() {
+            let selected = i == app.ffmpeg_submenu_idx;
+            let label_style = if selected {
+                Style::default().fg(Color::White).add_modifier(Modifier::REVERSED)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            lines.push(Line::from(vec![
+                Span::styled(format!(" [{}] ", action.key), Style::default().fg(Color::Yellow)),
+                Span::styled(action.label, label_style),
+            ]));
+        }
+        lines.push(Line::default());
+        lines.push(Line::from(Span::styled(" copies to clipboard:", Style::default().fg(Color::DarkGray))));
+        lines.push(Line::from(Span::styled(format!("   {}", preview), Style::default().fg(Color::Cyan))));
+        lines.push(Line::default());
+        let key_style = Style::default().fg(Color::Yellow);
+        let dim_style = Style::default().fg(Color::DarkGray);
+        lines.push(Line::from(vec![
+            Span::raw(" "),
+            Span::styled("[j/k]", key_style),
+            Span::styled(" Navigate", dim_style),
+            Span::styled("  ", dim_style),
+            Span::styled("[Enter]", key_style),
+            Span::styled(" Copy to clipboard", dim_style),
+            Span::styled("  ", dim_style),
+            Span::styled("[Esc]", key_style),
+            Span::styled(" Cancel", dim_style),
+        ]));
+        f.render_widget(
+            Paragraph::new(lines).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Yellow))
+                    .title(Span::styled(" ffmpeg — copy to clipboard ", Style::default().fg(Color::Yellow))),
+            ),
+            area,
+        );
+    }
+
     if let Some(ref confirm) = app.history_confirm {
         let question = match confirm {
             HistoryConfirm::DeleteEntry => " Delete this history entry?",
             HistoryConfirm::ClearAll => " Clear all history?",
         };
-        let area = centered_rect(46, 6, f.area());
+        let mut area = centered_rect(56, 6, f.area());
+        area.y = area.y.saturating_sub(4);
         f.render_widget(Clear, area);
         f.render_widget(
             Paragraph::new(vec![
@@ -272,10 +317,6 @@ pub fn shortcuts_hint(app: &App) -> Line<'static> {
     let dim_style = Style::default().fg(Color::DarkGray);
 
     let mut parts: Vec<(&'static str, &'static str)> = vec![];
-
-    if app.ffmpeg_child.is_some() {
-        parts.push(("[x]", "cancel encoding"));
-    }
 
     match app.focus {
         Focus::Zones => {

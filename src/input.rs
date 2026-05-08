@@ -1,5 +1,6 @@
 use crossterm::event::{Event, KeyCode, KeyEventKind, MouseButton, MouseEvent, MouseEventKind};
 
+use crate::actions::FFMPEG_SUBACTIONS;
 use crate::app::{App, Focus};
 
 pub enum AppCommand {
@@ -12,7 +13,6 @@ pub enum AppCommand {
     FocusPrev,
     RunSelectedAction,
     RunActionByKey(char),
-    CancelEncoding,
     AskDeleteEntry,
     AskClearAll,
     ConfirmHistoryAction,
@@ -24,6 +24,10 @@ pub enum AppCommand {
     MouseDragRight(u16),
     MouseRelease,
     HoverGutter(bool, bool),
+    RunFfmpegSubaction(char),
+    FfmpegSubmenuDown,
+    FfmpegSubmenuUp,
+    CloseFfmpegSubmenu,
     None,
 }
 
@@ -42,8 +46,23 @@ fn handle_key(code: KeyCode, app: &App) -> AppCommand {
             _ => AppCommand::CancelHistoryAction,
         };
     }
+    if app.ffmpeg_submenu {
+        return match code {
+            KeyCode::Esc => AppCommand::CloseFfmpegSubmenu,
+            KeyCode::Down | KeyCode::Char('j') => AppCommand::FfmpegSubmenuDown,
+            KeyCode::Up | KeyCode::Char('k') => AppCommand::FfmpegSubmenuUp,
+            KeyCode::Enter => {
+                if let Some(action) = FFMPEG_SUBACTIONS.get(app.ffmpeg_submenu_idx) {
+                    AppCommand::RunFfmpegSubaction(action.key)
+                } else {
+                    AppCommand::None
+                }
+            }
+            KeyCode::Char(c) => AppCommand::RunFfmpegSubaction(c),
+            _ => AppCommand::None,
+        };
+    }
     match code {
-        KeyCode::Char('x') if app.ffmpeg_child.is_some() => AppCommand::CancelEncoding,
         KeyCode::Char('x') if app.focus == Focus::History => AppCommand::AskDeleteEntry,
         KeyCode::Char('X') if app.focus == Focus::History => AppCommand::AskClearAll,
         KeyCode::Char('q') => AppCommand::Quit,
@@ -64,18 +83,17 @@ fn handle_key(code: KeyCode, app: &App) -> AppCommand {
 }
 
 fn handle_mouse(mouse: MouseEvent, app: &App) -> AppCommand {
-    let left_col = app.zone_width;
-    let right_col = app.zone_width + 1 + app.history_width;
+    let left_border = app.zone_width.saturating_sub(1);
+    let right_border = app.zone_width + app.history_width.saturating_sub(1);
+    let near_left = mouse.column == left_border || mouse.column == left_border + 1;
+    let near_right = mouse.column == right_border || mouse.column == right_border + 1;
     match mouse.kind {
-        MouseEventKind::Down(MouseButton::Left) if mouse.column == left_col => AppCommand::StartDrag,
-        MouseEventKind::Down(MouseButton::Left) if mouse.column == right_col => AppCommand::StartDragRight,
+        MouseEventKind::Down(MouseButton::Left) if near_left => AppCommand::StartDrag,
+        MouseEventKind::Down(MouseButton::Left) if near_right => AppCommand::StartDragRight,
         MouseEventKind::Drag(MouseButton::Left) if app.dragging => AppCommand::MouseDrag(mouse.column),
         MouseEventKind::Drag(MouseButton::Left) if app.dragging_right => AppCommand::MouseDragRight(mouse.column),
         MouseEventKind::Up(MouseButton::Left) => AppCommand::MouseRelease,
-        MouseEventKind::Moved => AppCommand::HoverGutter(
-            mouse.column == left_col,
-            mouse.column == right_col,
-        ),
+        MouseEventKind::Moved => AppCommand::HoverGutter(near_left, near_right),
         _ => AppCommand::None,
     }
 }

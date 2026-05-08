@@ -1,6 +1,5 @@
 mod actions;
 mod app;
-mod ffmpeg;
 mod input;
 mod ui;
 mod zones;
@@ -15,7 +14,6 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{io, process::Command, time::Duration};
 
 use app::{App, Focus, HistoryConfirm};
-use ffmpeg::ffmpeg_last_line;
 use input::AppCommand;
 use ui::ui;
 use zones::config_path;
@@ -56,12 +54,6 @@ fn edit_config(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<
 
 fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<()> {
     loop {
-        if let Some(ref log_path) = app.ffmpeg_log.clone() {
-            if let Some(line) = ffmpeg_last_line(log_path) {
-                app.status = Some(line);
-            }
-        }
-
         terminal.draw(|f| ui(f, app))?;
 
         if !event::poll(Duration::from_millis(250))? {
@@ -171,18 +163,11 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 }
                 if app.cd_target.is_some() { return Ok(()); }
             }
-            AppCommand::CancelEncoding => {
-                if let Some(mut child) = app.ffmpeg_child.take() {
-                    let _ = child.kill();
-                }
-                app.ffmpeg_log = None;
-                app.status = Some("Encodage annulé".to_string());
-            }
             AppCommand::StartDrag => app.dragging = true,
             AppCommand::StartDragRight => app.dragging_right = true,
-            AppCommand::MouseDrag(col) => app.zone_width = col.max(10),
+            AppCommand::MouseDrag(col) => app.zone_width = col.saturating_add(1).max(10),
             AppCommand::MouseDragRight(col) => {
-                app.history_width = col.saturating_sub(app.zone_width + 1).max(10);
+                app.history_width = col.saturating_sub(app.zone_width).saturating_add(1).max(10);
             }
             AppCommand::MouseRelease => {
                 app.dragging = false;
@@ -191,6 +176,24 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
             AppCommand::HoverGutter(left, right) => {
                 app.hover_gutter = left;
                 app.hover_right_gutter = right;
+            }
+            AppCommand::RunFfmpegSubaction(c) => {
+                let _ = app.run_ffmpeg_subaction(c);
+            }
+            AppCommand::FfmpegSubmenuDown => {
+                let n = crate::actions::FFMPEG_SUBACTIONS.len();
+                if n > 0 {
+                    app.ffmpeg_submenu_idx = (app.ffmpeg_submenu_idx + 1) % n;
+                }
+            }
+            AppCommand::FfmpegSubmenuUp => {
+                let n = crate::actions::FFMPEG_SUBACTIONS.len();
+                if n > 0 {
+                    app.ffmpeg_submenu_idx = app.ffmpeg_submenu_idx.saturating_sub(1);
+                }
+            }
+            AppCommand::CloseFfmpegSubmenu => {
+                app.ffmpeg_submenu = false;
             }
             AppCommand::None => {}
         }
