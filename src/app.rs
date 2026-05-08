@@ -57,7 +57,7 @@ pub enum Focus {
 fn history_path() -> PathBuf {
     dirs_next::config_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("ratafzf_history")
+        .join("easy-search_history")
 }
 
 fn load_history() -> Vec<PathBuf> {
@@ -92,6 +92,7 @@ pub struct App {
     pub history_state: ListState,
     pub status: Option<String>,
     pub cd_target: Option<PathBuf>,
+    pub edit_target: Option<PathBuf>,
     pub zone_width: u16,
     pub history_width: u16,
     pub dragging: bool,
@@ -102,6 +103,7 @@ pub struct App {
     pub history_confirm: Option<HistoryConfirm>,
     pub ffmpeg_submenu: bool,
     pub ffmpeg_submenu_idx: usize,
+    pub flash_action: Option<char>,
 }
 
 impl App {
@@ -129,6 +131,7 @@ impl App {
             history_state,
             status: None,
             cd_target: None,
+            edit_target: None,
             zone_width: 30,
             history_width: 40,
             dragging: false,
@@ -139,6 +142,7 @@ impl App {
             history_confirm: None,
             ffmpeg_submenu: false,
             ffmpeg_submenu_idx: 0,
+            flash_action: None,
         }
     }
 
@@ -189,13 +193,13 @@ impl App {
              | fzf --border rounded --border-label ' {} ' --border-label-pos 2 --color 'label:yellow' \
                    --header '↑/↓ ctrl+k/j/p/n: Navigate    Enter: Select    Esc/ctrl+c: Cancel' \
                    --preview '~/.config/fzf/preview.sh {{}}' --preview-window=right:50%:border-left \
-             > /tmp/ratafzf_result",
+             > /tmp/easy-search_result",
             fd_paths, label
         )
     }
 
     pub fn apply_fzf_result(&mut self) {
-        if let Ok(content) = std::fs::read_to_string("/tmp/ratafzf_result") {
+        if let Ok(content) = std::fs::read_to_string("/tmp/easy-search_result") {
             let path_str = content.trim().to_string();
             if !path_str.is_empty() {
                 let path = PathBuf::from(&path_str);
@@ -261,8 +265,7 @@ impl App {
                 self.status = Some(format!("Opened {}", path.display()));
             }
             'e' => {
-                Command::new("kate").arg(&path)
-                    .stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
+                self.edit_target = Some(path.clone());
                 self.status = Some(format!("Editing {}", path.display()));
             }
             'd' => {

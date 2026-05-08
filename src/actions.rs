@@ -10,7 +10,7 @@ pub struct Action {
 pub const ACTIONS_FILE: &[Action] = &[
     Action { key: 'o', label: "open" },
     Action { key: 'p', label: "open parent folder" },
-    Action { key: 'e', label: "edit with kate" },
+    Action { key: 'e', label: "edit with $EDITOR" },
     Action { key: 'd', label: "cd" },
     Action { key: 'c', label: "copy path" },
     Action { key: 'n', label: "copy filename" },
@@ -26,7 +26,6 @@ pub const ACTIONS_DIR: &[Action] = &[
     Action { key: 'o', label: "open" },
     Action { key: 'd', label: "cd" },
     Action { key: 'c', label: "copy path" },
-    Action { key: 'n', label: "copy filename" },
 ];
 
 pub fn copy_to_clipboard(s: &str) -> Result<()> {

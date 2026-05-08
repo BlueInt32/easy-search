@@ -163,10 +163,16 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
         .current_actions()
         .iter()
         .map(|a| {
+            let flash = app.flash_action == Some(a.key);
             if no_file {
                 ListItem::new(Line::from(vec![
                     Span::styled(format!("[{}] ", a.key), Style::default().fg(Color::DarkGray)),
                     Span::styled(a.label, Style::default().fg(Color::DarkGray)),
+                ]))
+            } else if flash {
+                ListItem::new(Line::from(vec![
+                    Span::styled(format!("[{}] ", a.key), Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(a.label, Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)),
                 ]))
             } else {
                 ListItem::new(Line::from(vec![

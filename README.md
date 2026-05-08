@@ -25,7 +25,7 @@ Pick a file with fzf, then act on it — open, edit, cd, copy.
 - **fzf picker** — launches in a tmux split (or inline as fallback) with file preview
 - **History** — middle panel showing recently picked files; navigate and re-select instantly
 - **Actions** — context-aware: different actions for files vs. directories
-- **cd support** — writes the target to `/tmp/ratafzf_lastdir`; wire it to a shell function to actually `cd` there
+- **cd support** — writes the target to `/tmp/easy-search_lastdir`; wire it to a shell function to actually `cd` there
 - **Resizable panels** — drag either gutter to adjust panel widths
 
 ## Dependencies
@@ -54,7 +54,7 @@ sudo pacman -S fd fzf
 
 ```sh
 cargo build --release
-cp target/release/ratafzf ~/.local/bin/
+cp target/release/easy-search ~/.local/bin/
 ```
 
 ### cd integration
@@ -63,17 +63,17 @@ Add this to your `.bashrc` / `.zshrc` to make `[d]` actually change your shell d
 
 ```sh
 function es() {
-    ratafzf
-    if [ -f /tmp/ratafzf_lastdir ]; then
-        cd "$(cat /tmp/ratafzf_lastdir)"
-        rm /tmp/ratafzf_lastdir
+    easy-search
+    if [ -f /tmp/easy-search_lastdir ]; then
+        cd "$(cat /tmp/easy-search_lastdir)"
+        rm /tmp/easy-search_lastdir
     fi
 }
 ```
 
 ## Configuration
 
-Config lives at `~/.config/ratafzf.yaml` (created automatically on first run):
+Config lives at `~/.config/easy-search.yaml` (created automatically on first run):
 
 ```yaml
 zones:

@@ -19,15 +19,15 @@ use ui::ui;
 use zones::config_path;
 
 fn open_picker(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App, cmd: &str) -> Result<()> {
-    let _ = std::fs::remove_file("/tmp/ratafzf_result");
+    let _ = std::fs::remove_file("/tmp/easy-search_result");
     if std::env::var("TMUX").is_ok() {
-        let full_cmd = format!("{}; tmux wait-for -S ratafzf-done", cmd);
+        let full_cmd = format!("{}; tmux wait-for -S easy-search-done", cmd);
         Command::new("tmux")
             .args(["split-window", "-v", "-l", "70%", "sh", "-c", &full_cmd])
             .status()?;
         app.fzf_running = true;
         terminal.draw(|f| ui(f, app))?;
-        Command::new("tmux").args(["wait-for", "ratafzf-done"]).status()?;
+        Command::new("tmux").args(["wait-for", "easy-search-done"]).status()?;
         app.fzf_running = false;
     } else {
         disable_raw_mode()?;
@@ -37,6 +37,17 @@ fn open_picker(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut 
         execute!(terminal.backend_mut(), EnterAlternateScreen, EnableMouseCapture)?;
     }
     app.apply_fzf_result();
+    terminal.clear()?;
+    Ok(())
+}
+
+fn edit_file(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, path: &std::path::Path) -> Result<()> {
+    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nvim".into());
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+    Command::new(&editor).arg(path).status()?;
+    enable_raw_mode()?;
+    execute!(terminal.backend_mut(), EnterAlternateScreen, EnableMouseCapture)?;
     terminal.clear()?;
     Ok(())
 }
@@ -55,6 +66,7 @@ fn edit_config(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<
 fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<()> {
     loop {
         terminal.draw(|f| ui(f, app))?;
+        app.flash_action = None;
 
         if !event::poll(Duration::from_millis(250))? {
             continue;
@@ -155,13 +167,17 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                     let _ = app.run_action(action);
                 }
                 if app.cd_target.is_some() { return Ok(()); }
+                if let Some(path) = app.edit_target.take() { edit_file(terminal, &path)?; }
             }
             AppCommand::RunActionByKey(c) => {
+                app.flash_action = Some(c);
+                terminal.draw(|f| ui(f, app))?;
                 let actions = app.current_actions().to_vec();
                 if let Some(action) = actions.iter().find(|a| a.key == c) {
                     let _ = app.run_action(action);
                 }
                 if app.cd_target.is_some() { return Ok(()); }
+                if let Some(path) = app.edit_target.take() { edit_file(terminal, &path)?; }
             }
             AppCommand::StartDrag => app.dragging = true,
             AppCommand::StartDragRight => app.dragging_right = true,
@@ -215,7 +231,7 @@ fn main() -> Result<()> {
     execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
 
     if let Some(ref target) = app.cd_target {
-        std::fs::write("/tmp/ratafzf_lastdir", target.to_string_lossy().as_bytes())?;
+        std::fs::write("/tmp/easy-search_lastdir", target.to_string_lossy().as_bytes())?;
     }
 
     result

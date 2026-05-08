@@ -77,7 +77,7 @@ fn handle_key(code: KeyCode, app: &App) -> AppCommand {
             Focus::History => AppCommand::SelectHistoryItem,
             Focus::Actions => AppCommand::RunSelectedAction,
         },
-        KeyCode::Char(c) if app.focus == Focus::Actions => AppCommand::RunActionByKey(c),
+        KeyCode::Char(c) if app.focus == Focus::Actions || app.focus == Focus::History => AppCommand::RunActionByKey(c),
         _ => AppCommand::None,
     }
 }

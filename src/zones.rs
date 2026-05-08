@@ -16,7 +16,7 @@ pub struct Config {
 pub fn config_path() -> PathBuf {
     dirs_next::config_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("ratafzf.yaml")
+        .join("easy-search.yaml")
 }
 
 pub fn load_config() -> Config {
