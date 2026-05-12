@@ -154,7 +154,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                     let n = app.history.len();
                     if n > 0 {
                         let i = app.history_state.selected().unwrap_or(0);
-                        app.history_state.select(Some(i.saturating_sub(1)));
+                        app.history_state.select(Some(if i == 0 { n - 1 } else { i - 1 }));
                         app.sync_selected_from_history();
                     }
                 }
@@ -162,7 +162,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                     let n = app.current_actions().len();
                     if n > 0 {
                         let i = app.action_state.selected().unwrap_or(0);
-                        app.action_state.select(Some(i.saturating_sub(1)));
+                        app.action_state.select(Some(if i == 0 { n - 1 } else { i - 1 }));
                     }
                 }
             }},
