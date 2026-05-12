@@ -274,7 +274,7 @@ impl App {
             }
             'c' => {
                 copy_to_clipboard(&path.to_string_lossy())?;
-                self.status = Some("Chemin copié".to_string());
+                self.status = Some("Path copied".to_string());
             }
             'n' => {
                 let name = path
@@ -282,7 +282,7 @@ impl App {
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_default();
                 copy_to_clipboard(&name)?;
-                self.status = Some("Nom copié".to_string());
+                self.status = Some("Name copied".to_string());
             }
             'r' => {
                 self.ffmpeg_submenu = true;
@@ -311,7 +311,7 @@ impl App {
         };
         if let Some(cmd) = build_ffmpeg_command(&path, key) {
             copy_to_clipboard(&cmd)?;
-            self.status = Some("Commande ffmpeg copiée".to_string());
+            self.status = Some("ffmpeg command copied".to_string());
             self.ffmpeg_submenu = false;
         }
         Ok(())
