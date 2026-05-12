@@ -318,7 +318,7 @@ fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
     Rect::new(x, y, width.min(r.width), height.min(r.height))
 }
 
-pub fn shortcuts_hint(app: &App) -> Line<'static> {
+fn shortcuts_hint(app: &App) -> Line<'static> {
     let key_style = Style::default().fg(Color::Yellow);
     let dim_style = Style::default().fg(Color::DarkGray);
 
