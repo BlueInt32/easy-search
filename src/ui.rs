@@ -225,8 +225,8 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
     } else {
         None
     };
-    let status = all_zones_hint.as_deref()
-        .or(app.status.as_deref())
+    let status = app.status.as_deref()
+        .or(all_zones_hint.as_deref())
         .unwrap_or("");
     f.render_widget(
         Paragraph::new(status).style(Style::default().fg(Color::DarkGray)),

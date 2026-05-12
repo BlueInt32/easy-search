@@ -84,6 +84,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 terminal.clear()?;
             }
             AppCommand::FocusNext => {
+                app.status = None;
                 app.focus = match app.focus {
                     Focus::Zones => Focus::History,
                     Focus::History => Focus::Actions,
@@ -94,6 +95,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 }
             }
             AppCommand::FocusPrev => {
+                app.status = None;
                 app.focus = match app.focus {
                     Focus::Zones => Focus::Actions,
                     Focus::History => Focus::Zones,
@@ -117,7 +119,9 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 app.select_history_item();
                 if app.cd_target.is_some() { return Ok(()); }
             }
-            AppCommand::NavigateDown => match app.focus {
+            AppCommand::NavigateDown => {
+                app.status = None;
+                match app.focus {
                 Focus::Zones => {
                     let i = app.zone_state.selected().unwrap_or(0);
                     app.zone_state.select(Some((i + 1) % app.zones.len()));
@@ -137,8 +141,10 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                         app.action_state.select(Some((i + 1) % n));
                     }
                 }
-            },
-            AppCommand::NavigateUp => match app.focus {
+            }},
+            AppCommand::NavigateUp => {
+                app.status = None;
+                match app.focus {
                 Focus::Zones => {
                     let i = app.zone_state.selected().unwrap_or(0);
                     app.zone_state
@@ -159,7 +165,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                         app.action_state.select(Some(i.saturating_sub(1)));
                     }
                 }
-            },
+            }},
             AppCommand::RunSelectedAction => {
                 let idx = app.action_state.selected().unwrap_or(0);
                 let actions = app.current_actions().to_vec();
