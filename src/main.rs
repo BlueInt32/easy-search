@@ -185,20 +185,6 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 if app.cd_target.is_some() { return Ok(()); }
                 if let Some(path) = app.edit_target.take() { edit_file(terminal, &path)?; }
             }
-            AppCommand::StartDrag => app.dragging = true,
-            AppCommand::StartDragRight => app.dragging_right = true,
-            AppCommand::MouseDrag(col) => app.zone_width = col.saturating_add(1).max(10),
-            AppCommand::MouseDragRight(col) => {
-                app.history_width = col.saturating_sub(app.zone_width).saturating_add(1).max(10);
-            }
-            AppCommand::MouseRelease => {
-                app.dragging = false;
-                app.dragging_right = false;
-            }
-            AppCommand::HoverGutter(left, right) => {
-                app.hover_gutter = left;
-                app.hover_right_gutter = right;
-            }
             AppCommand::RunFfmpegSubaction(c) => {
                 let _ = app.run_ffmpeg_subaction(c);
             }
@@ -222,8 +208,17 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
     }
 }
 
+struct TerminalGuard;
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let _ = disable_raw_mode();
+        let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+    }
+}
+
 fn main() -> Result<()> {
     enable_raw_mode()?;
+    let _guard = TerminalGuard;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
 
