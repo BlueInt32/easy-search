@@ -34,7 +34,9 @@ pub fn copy_to_clipboard(s: &str) -> Result<()> {
         .args(["-selection", "clipboard"])
         .stdin(Stdio::piped())
         .spawn()?;
-    child.stdin.as_mut().unwrap().write_all(s.as_bytes())?;
+    child.stdin.as_mut()
+        .ok_or_else(|| anyhow::anyhow!("xclip stdin not captured"))?
+        .write_all(s.as_bytes())?;
     child.wait()?;
     Ok(())
 }
