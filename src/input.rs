@@ -49,6 +49,7 @@ fn handle_key(code: KeyCode, app: &App) -> AppCommand {
     if app.ffmpeg_submenu {
         return match code {
             KeyCode::Esc => AppCommand::CloseFfmpegSubmenu,
+            KeyCode::Char('q') => AppCommand::Quit,
             KeyCode::Down | KeyCode::Char('j') => AppCommand::FfmpegSubmenuDown,
             KeyCode::Up | KeyCode::Char('k') => AppCommand::FfmpegSubmenuUp,
             KeyCode::Enter => {
