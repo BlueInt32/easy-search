@@ -11,7 +11,7 @@ cargo run                          # run directly
 cargo clippy                       # lint
 ```
 
-No tests exist yet. There is no test suite to run.
+No tests exist yet. There is no test suite to run. Always run `cargo build --release` after making changes so the user can test them.
 
 ## Architecture
 
@@ -55,6 +55,10 @@ Three horizontally-split panels with draggable gutters (widths stored in `app.zo
 - **Actions** (right): context-sensitive — `ACTIONS_FILE` vs `ACTIONS_DIR` depending on `selected_file`
 
 Two floating overlays rendered on top: ffmpeg submenu popup and history-confirm dialog.
+
+## Language
+
+All UI labels, status messages, and user-facing strings must be in English only. Never write labels or messages in French or any other language.
 
 ## Task backlog
 
