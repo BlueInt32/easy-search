@@ -212,9 +212,9 @@ impl App {
         format!(
             "fdfind --hidden --no-ignore {} \
              -E .wine -E .java -E .thunderbird -E .mozilla -E .git -E node_modules -E obj \
-             | fzf --border rounded --border-label ' {} ' --border-label-pos 2 --color 'label:yellow' \
+             | $HOME/.fzf/bin/fzf --border rounded --border-label ' {} ' --border-label-pos 2 --color 'label:yellow' \
                    --header '↑/↓ ctrl+k/j/p/n: Navigate    Enter: Select    Esc/ctrl+c: Cancel' \
-                   --preview '~/.config/fzf/preview.sh {{}}' --preview-window=right:50%:border-left \
+                   --preview '$HOME/.config/fzf/preview.sh {{}}' --preview-window=right:50%:border-left \
              > /tmp/easy-search_result",
             fd_paths, label
         )

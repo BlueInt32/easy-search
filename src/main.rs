@@ -21,14 +21,9 @@ use zones::config_path;
 fn open_picker(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App, cmd: &str) -> Result<()> {
     let _ = std::fs::remove_file("/tmp/easy-search_result");
     if std::env::var("TMUX").is_ok() {
-        let full_cmd = format!("{}; tmux wait-for -S easy-search-done", cmd);
         Command::new("tmux")
-            .args(["split-window", "-v", "-l", "70%", "sh", "-c", &full_cmd])
+            .args(["display-popup", "-E", "-w", "80%", "-h", "80%", "sh", "-c", cmd])
             .status()?;
-        app.fzf_running = true;
-        terminal.draw(|f| ui(f, app))?;
-        Command::new("tmux").args(["wait-for", "easy-search-done"]).status()?;
-        app.fzf_running = false;
     } else {
         disable_raw_mode()?;
         execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
