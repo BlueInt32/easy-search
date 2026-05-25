@@ -110,24 +110,24 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
                 let parent = e.path.parent()
                     .map(|par| par.to_string_lossy().into_owned())
                     .unwrap_or_default();
-                let chars: Vec<char> = filename.chars().collect();
-                let filename_display = if chars.len() > 25 {
-                    format!("{}…", chars[..24].iter().collect::<String>())
+                let path_chars: Vec<char> = parent.chars().collect();
+                let path_display = if path_chars.len() > 45 {
+                    format!("…{}", path_chars[path_chars.len() - 44..].iter().collect::<String>())
                 } else {
-                    filename
+                    parent
                 };
                 Row::new(vec![
                     Cell::from(format_datetime(e.added_at)).style(Style::default().fg(Color::DarkGray)),
-                    Cell::from(filename_display).style(Style::default().fg(Color::White)),
-                    Cell::from(parent).style(Style::default().fg(Color::DarkGray)),
+                    Cell::from(filename).style(Style::default().fg(Color::White)),
+                    Cell::from(path_display).style(Style::default().fg(Color::DarkGray)),
                 ])
             })
             .collect();
         f.render_stateful_widget(
             Table::new(history_rows, [
                 Constraint::Length(11),
-                Constraint::Length(26),
                 Constraint::Min(0),
+                Constraint::Length(45),
             ])
             .block(history_block)
             .column_spacing(1)
