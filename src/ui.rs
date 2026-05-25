@@ -62,7 +62,7 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
             } else if zones_focus {
                 Style::default().add_modifier(Modifier::REVERSED)
             } else {
-                Style::default()
+                Style::default().bg(Color::Rgb(55, 55, 55))
             }),
         cols[0],
         &mut zone_state,
@@ -134,7 +134,7 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
             .row_highlight_style(if history_focus {
                 Style::default().add_modifier(Modifier::REVERSED)
             } else {
-                Style::default()
+                Style::default().bg(Color::Rgb(55, 55, 55))
             }),
             cols[1],
             &mut history_state,
