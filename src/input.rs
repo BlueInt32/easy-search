@@ -1,4 +1,4 @@
-use crossterm::event::{Event, KeyCode, KeyEventKind, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{Event, KeyCode, KeyEventKind, MouseEvent};
 
 use crate::actions::FFMPEG_SUBACTIONS;
 use crate::app::{App, Focus};
@@ -18,12 +18,6 @@ pub enum AppCommand {
     ConfirmHistoryAction,
     CancelHistoryAction,
     SelectHistoryItem,
-    StartDrag,
-    StartDragRight,
-    MouseDrag(u16),
-    MouseDragRight(u16),
-    MouseRelease,
-    HoverGutter(bool, bool),
     RunFfmpegSubaction(char),
     FfmpegSubmenuDown,
     FfmpegSubmenuUp,
@@ -83,19 +77,7 @@ fn handle_key(code: KeyCode, app: &App) -> AppCommand {
     }
 }
 
-fn handle_mouse(mouse: MouseEvent, app: &App) -> AppCommand {
-    let left_border = app.zone_width.saturating_sub(1);
-    let right_border = app.zone_width + app.history_width.saturating_sub(1);
-    let near_left = mouse.column == left_border || mouse.column == left_border + 1;
-    let near_right = mouse.column == right_border || mouse.column == right_border + 1;
-    match mouse.kind {
-        MouseEventKind::Down(MouseButton::Left) if near_left => AppCommand::StartDrag,
-        MouseEventKind::Down(MouseButton::Left) if near_right => AppCommand::StartDragRight,
-        MouseEventKind::Drag(MouseButton::Left) if app.dragging => AppCommand::MouseDrag(mouse.column),
-        MouseEventKind::Drag(MouseButton::Left) if app.dragging_right => AppCommand::MouseDragRight(mouse.column),
-        MouseEventKind::Up(MouseButton::Left) => AppCommand::MouseRelease,
-        MouseEventKind::Moved => AppCommand::HoverGutter(near_left, near_right),
-        _ => AppCommand::None,
-    }
+fn handle_mouse(_mouse: MouseEvent, _app: &App) -> AppCommand {
+    AppCommand::None
 }
 

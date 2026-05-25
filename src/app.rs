@@ -1,5 +1,5 @@
 use anyhow::Result;
-use ratatui::widgets::ListState;
+use ratatui::widgets::{ListState, TableState};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
@@ -54,29 +54,47 @@ pub enum Focus {
     Actions,
 }
 
+pub struct HistoryEntry {
+    pub path: PathBuf,
+    pub added_at: u64,
+}
+
+fn now_unix() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
 fn history_path() -> PathBuf {
     dirs_next::config_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
         .join("easy-search_history")
 }
 
-fn load_history() -> Vec<PathBuf> {
+fn load_history() -> Vec<HistoryEntry> {
     let path = history_path();
     match std::fs::read_to_string(&path) {
         Ok(content) => content
             .lines()
             .filter(|l| !l.is_empty())
-            .map(PathBuf::from)
+            .map(|l| {
+                if let Some((ts, p)) = l.split_once('\t') {
+                    HistoryEntry { path: PathBuf::from(p), added_at: ts.parse().unwrap_or(0) }
+                } else {
+                    HistoryEntry { path: PathBuf::from(l), added_at: 0 }
+                }
+            })
             .collect(),
         Err(_) => vec![],
     }
 }
 
-fn save_history(history: &[PathBuf]) {
+fn save_history(history: &[HistoryEntry]) {
     let path = history_path();
     let content = history
         .iter()
-        .map(|p| p.to_string_lossy().into_owned())
+        .map(|e| format!("{}\t{}", e.added_at, e.path.to_string_lossy()))
         .collect::<Vec<_>>()
         .join("\n");
     let _ = std::fs::write(&path, content);
@@ -88,17 +106,11 @@ pub struct App {
     pub zone_state: ListState,
     pub selected_file: Option<PathBuf>,
     pub action_state: ListState,
-    pub history: Vec<PathBuf>,
-    pub history_state: ListState,
+    pub history: Vec<HistoryEntry>,
+    pub history_state: TableState,
     pub status: Option<String>,
     pub cd_target: Option<PathBuf>,
     pub edit_target: Option<PathBuf>,
-    pub zone_width: u16,
-    pub history_width: u16,
-    pub dragging: bool,
-    pub dragging_right: bool,
-    pub hover_gutter: bool,
-    pub hover_right_gutter: bool,
     pub fzf_running: bool,
     pub history_confirm: Option<HistoryConfirm>,
     pub ffmpeg_submenu: bool,
@@ -114,10 +126,10 @@ impl App {
         let mut action_state = ListState::default();
         action_state.select(Some(0));
         let history = load_history();
-        let mut history_state = ListState::default();
+        let mut history_state = TableState::default();
         let selected_file = if !history.is_empty() {
             history_state.select(Some(0));
-            Some(history[0].clone())
+            Some(history[0].path.clone())
         } else {
             None
         };
@@ -132,18 +144,28 @@ impl App {
             status: None,
             cd_target: None,
             edit_target: None,
-            zone_width: 30,
-            history_width: 40,
-            dragging: false,
-            dragging_right: false,
-            hover_gutter: false,
-            hover_right_gutter: false,
             fzf_running: false,
             history_confirm: None,
             ffmpeg_submenu: false,
             ffmpeg_submenu_idx: 0,
             flash_action: None,
         }
+    }
+
+    pub fn zone_panel_width(&self) -> u16 {
+        let max = self.zones.iter()
+            .map(|z| z.name.len().max(12) + z.path.len())
+            .max()
+            .unwrap_or(10) as u16;
+        (max + 3).clamp(16, 50)
+    }
+
+    pub fn actions_panel_width() -> u16 {
+        let max = ACTIONS_FILE.iter()
+            .map(|a| 4 + a.label.len())
+            .max()
+            .unwrap_or(20) as u16;
+        max + 4
     }
 
     pub fn current_zone_path(&self) -> &str {
@@ -203,11 +225,11 @@ impl App {
             let path_str = content.trim().to_string();
             if !path_str.is_empty() {
                 let path = PathBuf::from(&path_str);
-                self.selected_file = Some(path.clone());
-                self.history.retain(|p| p != &path);
-                self.history.insert(0, path);
+                self.history.retain(|e| e.path != path);
+                self.history.insert(0, HistoryEntry { path: path.clone(), added_at: now_unix() });
                 self.history_state.select(Some(0));
                 save_history(&self.history);
+                self.selected_file = Some(path);
                 self.action_state.select(Some(0));
                 self.focus = Focus::Actions;
                 self.status = None;
@@ -242,7 +264,7 @@ impl App {
     pub fn sync_selected_from_history(&mut self) {
         self.selected_file = self.history_state.selected()
             .and_then(|i| self.history.get(i))
-            .cloned();
+            .map(|e| e.path.clone());
         self.action_state.select(Some(0));
     }
 

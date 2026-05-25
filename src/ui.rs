@@ -1,8 +1,9 @@
+use chrono::TimeZone;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph},
+    widgets::{Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table},
 };
 
 use crate::actions::FFMPEG_SUBACTIONS;
@@ -17,9 +18,9 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(app.zone_width),
-            Constraint::Length(app.history_width),
+            Constraint::Length(app.zone_panel_width()),
             Constraint::Min(0),
+            Constraint::Length(App::actions_panel_width()),
         ])
         .split(rows[0]);
 
@@ -34,9 +35,7 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
         .collect();
 
     let zones_focus = app.focus == Focus::Zones && !app.fzf_running;
-    let zones_border_style = if app.hover_gutter || app.dragging {
-        Style::default().fg(Color::White)
-    } else if zones_focus {
+    let zones_border_style = if zones_focus {
         Style::default().fg(Color::Yellow)
     } else {
         Style::default().fg(Color::DarkGray)
@@ -70,28 +69,23 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
     );
 
     let history_focus = app.focus == Focus::History && !app.fzf_running;
-    let history_border_style = if app.hover_right_gutter || app.dragging_right {
-        Style::default().fg(Color::White)
-    } else if history_focus {
+    let history_border_style = if history_focus {
         Style::default().fg(Color::Yellow)
     } else {
         Style::default().fg(Color::DarkGray)
     };
-    let history_items: Vec<ListItem> = app.history
-        .iter()
-        .map(|p| {
-            let filename = p.file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let parent = p.parent()
-                .map(|par| par.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            ListItem::new(Line::from(vec![
-                Span::styled(format!("{:<20}", filename), Style::default().fg(Color::White)),
-                Span::styled(parent, Style::default().fg(Color::DarkGray)),
-            ]))
-        })
-        .collect();
+    let history_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .title(Line::from(vec![
+            Span::styled("─", history_border_style),
+            Span::styled("History", if history_focus {
+                Style::default().fg(Color::Yellow)
+            } else {
+                Style::default()
+            }),
+        ]))
+        .border_style(history_border_style);
 
     let mut history_state = app.history_state.clone();
     if app.history.is_empty() {
@@ -103,44 +97,45 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
                     Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
                 )),
             ])
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
-                    .title(Line::from(vec![
-                        Span::styled("─", history_border_style),
-                        Span::styled("History", if history_focus {
-                            Style::default().fg(Color::Yellow)
-                        } else {
-                            Style::default()
-                        }),
-                    ]))
-                    .border_style(history_border_style),
-            ),
+            .block(history_block),
             cols[1],
         );
     } else {
-        f.render_stateful_widget(
-            List::new(history_items)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded)
-                        .title(Line::from(vec![
-                            Span::styled("─", history_border_style),
-                            Span::styled("History", if history_focus {
-                                Style::default().fg(Color::Yellow)
-                            } else {
-                                Style::default()
-                            }),
-                        ]))
-                        .border_style(history_border_style),
-                )
-                .highlight_style(if history_focus {
-                    Style::default().add_modifier(Modifier::REVERSED)
+        let history_rows: Vec<Row> = app.history
+            .iter()
+            .map(|e| {
+                let filename = e.path.file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let parent = e.path.parent()
+                    .map(|par| par.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let chars: Vec<char> = filename.chars().collect();
+                let filename_display = if chars.len() > 25 {
+                    format!("{}…", chars[..24].iter().collect::<String>())
                 } else {
-                    Style::default()
-                }),
+                    filename
+                };
+                Row::new(vec![
+                    Cell::from(format_datetime(e.added_at)).style(Style::default().fg(Color::DarkGray)),
+                    Cell::from(filename_display).style(Style::default().fg(Color::White)),
+                    Cell::from(parent).style(Style::default().fg(Color::DarkGray)),
+                ])
+            })
+            .collect();
+        f.render_stateful_widget(
+            Table::new(history_rows, [
+                Constraint::Length(11),
+                Constraint::Length(26),
+                Constraint::Min(0),
+            ])
+            .block(history_block)
+            .column_spacing(1)
+            .row_highlight_style(if history_focus {
+                Style::default().add_modifier(Modifier::REVERSED)
+            } else {
+                Style::default()
+            }),
             cols[1],
             &mut history_state,
         );
@@ -310,6 +305,17 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
             area,
         );
     }
+}
+
+fn format_datetime(ts: u64) -> String {
+    if ts == 0 {
+        return String::new();
+    }
+    chrono::Local
+        .timestamp_opt(ts as i64, 0)
+        .single()
+        .map(|dt| dt.format("%d/%m %H:%M").to_string())
+        .unwrap_or_default()
 }
 
 fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
