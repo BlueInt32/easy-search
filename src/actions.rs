@@ -24,6 +24,7 @@ pub const FFMPEG_SUBACTIONS: &[Action] = &[
 
 pub const ACTIONS_DIR: &[Action] = &[
     Action { key: 'o', label: "open" },
+    Action { key: 'p', label: "open parent folder" },
     Action { key: 'd', label: "cd" },
     Action { key: 'c', label: "copy path" },
 ];
