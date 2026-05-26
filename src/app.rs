@@ -241,7 +241,8 @@ impl App {
             "{} --hidden --no-ignore {} \
              -E .wine -E .java -E .thunderbird -E .mozilla -E .git -E node_modules -E obj \
              | $HOME/.fzf/bin/fzf --border rounded --border-label ' {} ' --border-label-pos 2 --color 'label:yellow' \
-                   --header '↑/↓ ctrl+k/j/p/n: Navigate    Enter: Select    Esc/ctrl+c: Cancel' \
+                   --header '↑/↓ ctrl+k/j/p/n: Navigate    Enter: Select    alt+Enter: Open    Esc/ctrl+c: Cancel' \
+                   --expect alt-enter \
                    --preview {} --preview-window=right:50%:border-left \
              > /tmp/easy-search_result",
             fd_binary(), fd_paths, label, preview_cmd()
@@ -250,7 +251,9 @@ impl App {
 
     pub fn apply_fzf_result(&mut self) {
         if let Ok(content) = std::fs::read_to_string("/tmp/easy-search_result") {
-            let path_str = content.trim().to_string();
+            let mut lines = content.lines();
+            let key = lines.next().unwrap_or("").trim().to_string();
+            let path_str = lines.next().unwrap_or("").trim().to_string();
             if !path_str.is_empty() {
                 let path = PathBuf::from(&path_str);
                 self.history.retain(|e| e.path != path);
@@ -261,6 +264,16 @@ impl App {
                 self.action_state.select(Some(0));
                 self.focus = Focus::Actions;
                 self.status = None;
+                if key == "alt-enter" {
+                    let actions = if self.selected_file.as_ref().map_or(false, |p| p.is_dir()) {
+                        ACTIONS_DIR
+                    } else {
+                        ACTIONS_FILE
+                    };
+                    if let Some(open_action) = actions.iter().find(|a| a.key == 'o') {
+                        let _ = self.run_action(open_action);
+                    }
+                }
             }
         }
     }
