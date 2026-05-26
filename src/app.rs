@@ -241,8 +241,8 @@ impl App {
             "{} --hidden --no-ignore {} \
              -E .wine -E .java -E .thunderbird -E .mozilla -E .git -E node_modules -E obj \
              | $HOME/.fzf/bin/fzf --border rounded --border-label ' {} ' --border-label-pos 2 --color 'label:yellow' \
-                   --header '↑/↓ ctrl+k/j/p/n: Navigate    Enter: Select    alt+Enter: Open    Esc/ctrl+c: Cancel' \
-                   --expect alt-enter \
+                   --header '↑/↓ ctrl+k/j/p/n: Navigate    Enter: Select    ctrl+o/alt+Enter: Open    Esc/ctrl+c: Cancel' \
+                   --expect ctrl-o,alt-enter \
                    --preview {} --preview-window=right:50%:border-left \
              > /tmp/easy-search_result",
             fd_binary(), fd_paths, label, preview_cmd()
@@ -264,7 +264,7 @@ impl App {
                 self.action_state.select(Some(0));
                 self.focus = Focus::Actions;
                 self.status = None;
-                if key == "alt-enter" {
+                if key == "alt-enter" || key == "ctrl-o" {
                     let actions = if self.selected_file.as_ref().map_or(false, |p| p.is_dir()) {
                         ACTIONS_DIR
                     } else {
