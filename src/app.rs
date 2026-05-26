@@ -202,12 +202,12 @@ impl App {
         let (fd_paths, label) = if zone_path == "*" {
             let paths = self.zones.iter()
                 .filter(|z| z.path != "*")
-                .map(|z| format!("--search-path '{}'", z.path))
+                .map(|z| format!("--search-path {}", shell_escape(&z.path)))
                 .collect::<Vec<_>>()
                 .join(" ");
             (paths, "All zones")
         } else {
-            (format!("--search-path '{}'", zone_path), "Pick")
+            (format!("--search-path {}", shell_escape(zone_path)), "Pick")
         };
         format!(
             "fdfind --hidden --no-ignore {} \
