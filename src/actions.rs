@@ -31,12 +31,18 @@ pub const ACTIONS_DIR: &[Action] = &[
 
 pub fn copy_to_clipboard(s: &str) -> Result<()> {
     use std::io::Write;
-    let mut child = Command::new("xclip")
-        .args(["-selection", "clipboard"])
+    let wayland = std::env::var_os("WAYLAND_DISPLAY").is_some();
+    let (bin, args): (&str, &[&str]) = if wayland {
+        ("wl-copy", &[])
+    } else {
+        ("xclip", &["-selection", "clipboard"])
+    };
+    let mut child = Command::new(bin)
+        .args(args)
         .stdin(Stdio::piped())
         .spawn()?;
     child.stdin.as_mut()
-        .ok_or_else(|| anyhow::anyhow!("xclip stdin not captured"))?
+        .ok_or_else(|| anyhow::anyhow!("{bin} stdin not captured"))?
         .write_all(s.as_bytes())?;
     child.wait()?;
     Ok(())

@@ -2,12 +2,37 @@ use anyhow::Result;
 use ratatui::widgets::{ListState, TableState};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::LazyLock;
 
 use crate::actions::{Action, ACTIONS_DIR, ACTIONS_FILE, FFMPEG_SUBACTIONS, copy_to_clipboard};
 use crate::zones::{Zone, load_config};
 
 fn shell_escape(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+fn fd_binary() -> &'static str {
+    static FD_BIN: LazyLock<&'static str> = LazyLock::new(|| {
+        if Command::new("sh").args(["-c", "command -v fdfind"])
+            .output().map(|o| o.status.success()).unwrap_or(false)
+        {
+            "fdfind"
+        } else {
+            "fd"
+        }
+    });
+    *FD_BIN
+}
+
+fn preview_cmd() -> String {
+    let script = dirs_next::config_dir()
+        .unwrap_or_default()
+        .join("fzf/preview.sh");
+    if script.exists() {
+        shell_escape(&script.to_string_lossy()) + " {}"
+    } else {
+        "file {}; ls {} 2>/dev/null || true".to_string()
+    }
 }
 
 fn build_ffmpeg_command(path: &std::path::Path, key: char) -> Option<String> {
@@ -210,13 +235,13 @@ impl App {
             (format!("--search-path {}", shell_escape(zone_path)), "Pick")
         };
         format!(
-            "fdfind --hidden --no-ignore {} \
+            "{} --hidden --no-ignore {} \
              -E .wine -E .java -E .thunderbird -E .mozilla -E .git -E node_modules -E obj \
              | $HOME/.fzf/bin/fzf --border rounded --border-label ' {} ' --border-label-pos 2 --color 'label:yellow' \
                    --header '↑/↓ ctrl+k/j/p/n: Navigate    Enter: Select    Esc/ctrl+c: Cancel' \
-                   --preview '$HOME/.config/fzf/preview.sh {{}}' --preview-window=right:50%:border-left \
+                   --preview {} --preview-window=right:50%:border-left \
              > /tmp/easy-search_result",
-            fd_paths, label
+            fd_binary(), fd_paths, label, preview_cmd()
         )
     }
 
