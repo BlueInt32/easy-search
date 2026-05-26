@@ -9,11 +9,12 @@ Pick a file with fzf, then act on it — open, edit, cd, copy.
 ```
 ┌Zones──────────────────┬History──────────────────────────┬/mnt/books/dune.epub──┐
 │ all        *          │ dune.epub          /mnt/books    │ [o] open             │
-│ home       ~          │ notes.md           ~/docs        │ [p] open parent      │
-│ musique    /mnt/Music │ main.rs            ~/dev/foo/src │ [e] edit with kate   │
+│ home       ~          │ notes.md           ~/docs        │ [p] show in folder   │
+│ musique    /mnt/Music │ main.rs            ~/dev/foo/src │ [e] edit with $EDITOR│
 │ books      /mnt/books │                                  │ [d] cd               │
 │                       │                                  │ [c] copy path        │
 │                       │                                  │ [n] copy filename    │
+│                       │                                  │ [r] ffmpeg           │
 └───────────────────────┴──────────────────────────────────┴──────────────────────┘
 [j/k] Navigate  [Enter/f] Run search  [Tab/l] → history  [Z] Configure zones
 ```
@@ -24,31 +25,34 @@ Pick a file with fzf, then act on it — open, edit, cd, copy.
 - **All zone** — search across every configured zone at once
 - **fzf picker** — launches in a tmux split (or inline as fallback) with file preview
 - **History** — middle panel showing recently picked files; navigate and re-select instantly
-- **Actions** — context-aware: different actions for files vs. directories
+- **Actions** — context-aware: different actions for files vs. directories; file actions include an ffmpeg submenu (`[r]`) that copies a ready-to-run command to the clipboard
 - **cd support** — writes the target to `/tmp/easy-search_lastdir`; wire it to a shell function to actually `cd` there
-- **Resizable panels** — drag either gutter to adjust panel widths
 
 ## Dependencies
 
 ### Required
 
 - [`fd`](https://github.com/sharkdp/fd) — fast file finder used to index zones (`fdfind` on Debian/Ubuntu)
-- [`fzf`](https://github.com/junegunn/fzf) — fuzzy finder powering the file picker
+- [`fzf`](https://github.com/junegunn/fzf) — fuzzy finder powering the file picker; must be installed via the [fzf git method](https://github.com/junegunn/fzf#using-git) so it lands at `~/.fzf/` (the binary is referenced as `$HOME/.fzf/bin/fzf`)
 
 ```sh
-# Debian/Ubuntu
-sudo apt install fd-find fzf
+# Debian/Ubuntu (fd)
+sudo apt install fd-find
 
-# Arch
+# Arch (fd + fzf via pacman)
 sudo pacman -S fd fzf
+
+# fzf via git (required on all distros if not using Arch's package)
+git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf && ~/.fzf/install
 ```
 
 ### Optional
 
-- **`tmux`** — fzf opens in a split pane; without it, easy-search falls back to suspending the TUI
-- **`xclip`** — required for copy path / copy filename actions
-- **`xdg-open`** — required for open / open parent folder actions
-- **`kate`** — used by the edit action (swap in `src/actions.rs` if you prefer another editor)
+- **`tmux`** — fzf opens in a `display-popup`; without it, easy-search falls back to suspending the TUI
+- **`xclip`** — required for copy path / copy filename / ffmpeg actions
+- **`xdg-open`** — required for the open action
+- **`dolphin`** — required for the "show in folder" action (`[p]`)
+- **`$EDITOR`** — used by the edit action; falls back to `nvim` if unset
 
 ## Install
 
@@ -100,9 +104,26 @@ Press `[Z]` inside easy-search to open the config in your `$EDITOR`.
 | `x` | History | delete the selected history entry |
 | `X` | History | clear all history |
 | `Enter` | Actions | run the selected action |
-| `o/p/e/d/c/n` | Actions | run action by key |
+| `o` | Actions | open with `xdg-open` |
+| `p` | Actions | show in folder (opens Dolphin with file selected) |
+| `e` | Actions | edit with `$EDITOR` |
+| `d` | Actions | cd to file's directory |
+| `c` / `n` | Actions | copy full path / copy filename |
+| `r` | Actions (file) | open ffmpeg submenu |
 | `Z` | everywhere | open config in `$EDITOR` |
 | `q` | everywhere | quit |
+
+### ffmpeg submenu (`[r]`)
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | navigate subactions |
+| `Enter` | run selected subaction |
+| `e` | encode to mp4 (libx264, CRF 18) |
+| `a` | extract audio to mp3 |
+| `Esc` | close submenu |
+
+Subactions copy a ready-to-run ffmpeg command to the clipboard rather than executing it.
 
 ## Built with
 
