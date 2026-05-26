@@ -9,7 +9,7 @@ use ratatui::{
 use crate::actions::FFMPEG_SUBACTIONS;
 use crate::app::{App, Focus, HistoryConfirm};
 
-pub fn ui(f: &mut ratatui::Frame, app: &App) {
+pub fn ui(f: &mut ratatui::Frame, app: &mut App) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(1), Constraint::Length(1)])
@@ -40,7 +40,6 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
     } else {
         Style::default().fg(Color::DarkGray)
     };
-    let mut zone_state = app.zone_state.clone();
     f.render_stateful_widget(
         List::new(zone_items)
             .block(
@@ -65,7 +64,7 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
                 Style::default().bg(Color::Rgb(55, 55, 55))
             }),
         cols[0],
-        &mut zone_state,
+        &mut app.zone_state,
     );
 
     let history_focus = app.focus == Focus::History && !app.fzf_running;
@@ -87,7 +86,6 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
         ]))
         .border_style(history_border_style);
 
-    let mut history_state = app.history_state.clone();
     if app.history.is_empty() {
         f.render_widget(
             List::new(vec![
@@ -137,7 +135,7 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
                 Style::default().bg(Color::Rgb(55, 55, 55))
             }),
             cols[1],
-            &mut history_state,
+            &mut app.history_state,
         );
     }
 
@@ -185,7 +183,6 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
         )));
     }
 
-    let mut action_state = app.action_state.clone();
     f.render_stateful_widget(
         List::new(items)
             .block(
@@ -208,7 +205,7 @@ pub fn ui(f: &mut ratatui::Frame, app: &App) {
                 Style::default()
             }),
         cols[2],
-        &mut action_state,
+        &mut app.action_state,
     );
 
     let all_zones_hint = if app.is_all_zone_selected() {
