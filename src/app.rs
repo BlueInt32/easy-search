@@ -28,10 +28,13 @@ fn preview_cmd() -> String {
     let script = dirs_next::config_dir()
         .unwrap_or_default()
         .join("fzf/preview.sh");
+    // The entire value must be single-quoted for the outer sh -c shell;
+    // {} inside is the fzf placeholder, not a shell expansion.
     if script.exists() {
-        shell_escape(&script.to_string_lossy()) + " {}"
+        let escaped = script.to_string_lossy().replace('\'', "'\\''");
+        format!("'{} {{}}'", escaped)
     } else {
-        "file {}; ls {} 2>/dev/null || true".to_string()
+        "'file {}; ls {} 2>/dev/null || true'".to_string()
     }
 }
 
