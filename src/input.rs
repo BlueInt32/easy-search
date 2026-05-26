@@ -22,6 +22,8 @@ pub enum AppCommand {
     FfmpegSubmenuDown,
     FfmpegSubmenuUp,
     CloseFfmpegSubmenu,
+    OpenZoneFolder,
+    CdToZone,
     None,
 }
 
@@ -60,6 +62,8 @@ fn handle_key(code: KeyCode, app: &App) -> AppCommand {
     match code {
         KeyCode::Char('x') if app.focus == Focus::History => AppCommand::AskDeleteEntry,
         KeyCode::Char('X') if app.focus == Focus::History => AppCommand::AskClearAll,
+        KeyCode::Char('o') if app.focus == Focus::Zones => AppCommand::OpenZoneFolder,
+        KeyCode::Char('d') if app.focus == Focus::Zones => AppCommand::CdToZone,
         KeyCode::Char('q') => AppCommand::Quit,
         KeyCode::Char('Z') => AppCommand::EditConfig,
         KeyCode::Tab | KeyCode::Char('l') | KeyCode::Right => AppCommand::FocusNext,

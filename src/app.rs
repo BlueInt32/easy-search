@@ -355,6 +355,25 @@ impl App {
         build_ffmpeg_preview(key)
     }
 
+    pub fn open_zone_folder(&mut self) -> Result<()> {
+        let path = self.current_zone_path();
+        if path == "*" {
+            return Ok(());
+        }
+        let path = path.to_string();
+        Command::new("xdg-open").arg(&path)
+            .stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
+        self.status = Some(format!("Opened {}", path));
+        Ok(())
+    }
+
+    pub fn cd_to_zone(&mut self) {
+        let path = self.current_zone_path();
+        if path != "*" {
+            self.cd_target = Some(PathBuf::from(path));
+        }
+    }
+
     pub fn run_ffmpeg_subaction(&mut self, key: char) -> Result<()> {
         let path = match &self.selected_file {
             Some(p) => p.clone(),

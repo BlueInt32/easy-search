@@ -204,6 +204,15 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
             AppCommand::CloseFfmpegSubmenu => {
                 app.ffmpeg_submenu = false;
             }
+            AppCommand::OpenZoneFolder => {
+                if let Err(e) = app.open_zone_folder() {
+                    app.status = Some(format!("Error: {e}"));
+                }
+            }
+            AppCommand::CdToZone => {
+                app.cd_to_zone();
+                if app.cd_target.is_some() { return Ok(()); }
+            }
             AppCommand::None => {}
         }
     }

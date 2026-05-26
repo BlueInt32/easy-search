@@ -330,7 +330,11 @@ fn shortcuts_hint(app: &App) -> Line<'static> {
     match app.focus {
         Focus::Zones => {
             parts.push(("[j/k]", "Navigate"));
-            parts.push(("[Enter/f]", "Run search on this zone"));
+            parts.push(("[Enter/f]", "Search in zone"));
+            if !app.is_all_zone_selected() {
+                parts.push(("[o]", "Open folder"));
+                parts.push(("[d]", "cd to folder"));
+            }
             parts.push(("[Tab/l]", "→ history"));
         }
         Focus::History => {
