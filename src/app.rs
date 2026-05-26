@@ -311,10 +311,11 @@ impl App {
                 self.ffmpeg_submenu_idx = 0;
             }
             'p' => {
-                let parent = path.parent().unwrap_or(&path).to_path_buf();
-                Command::new("xdg-open").arg(&parent)
+                let path_str = path.to_string_lossy();
+                let path_str = path_str.trim_end_matches('/');
+                Command::new("dolphin").args(["--select", path_str])
                     .stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
-                self.status = Some(format!("Opened {}", parent.display()));
+                self.status = Some(format!("Opened {}", path.display()));
             }
             _ => {}
         }
