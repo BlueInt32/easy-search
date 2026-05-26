@@ -165,7 +165,9 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 let idx = app.action_state.selected().unwrap_or(0);
                 let actions = app.current_actions().to_vec();
                 if let Some(action) = actions.get(idx) {
-                    let _ = app.run_action(action);
+                    if let Err(e) = app.run_action(action) {
+                        app.status = Some(format!("Error: {e}"));
+                    }
                 }
                 if app.cd_target.is_some() { return Ok(()); }
                 if let Some(path) = app.edit_target.take() { edit_file(terminal, &path)?; }
@@ -175,13 +177,17 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 terminal.draw(|f| ui(f, app))?;
                 let actions = app.current_actions().to_vec();
                 if let Some(action) = actions.iter().find(|a| a.key == c) {
-                    let _ = app.run_action(action);
+                    if let Err(e) = app.run_action(action) {
+                        app.status = Some(format!("Error: {e}"));
+                    }
                 }
                 if app.cd_target.is_some() { return Ok(()); }
                 if let Some(path) = app.edit_target.take() { edit_file(terminal, &path)?; }
             }
             AppCommand::RunFfmpegSubaction(c) => {
-                let _ = app.run_ffmpeg_subaction(c);
+                if let Err(e) = app.run_ffmpeg_subaction(c) {
+                    app.status = Some(format!("Error: {e}"));
+                }
             }
             AppCommand::FfmpegSubmenuDown => {
                 let n = crate::actions::FFMPEG_SUBACTIONS.len();
