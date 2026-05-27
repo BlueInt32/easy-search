@@ -20,10 +20,10 @@ use zones::config_path;
 
 fn open_picker(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App, cmd: &str) -> Result<()> {
     let _ = std::fs::remove_file("/tmp/easy-search_result");
-    if std::env::var("TMUX").is_ok() {
+    if let Ok(pane_id) = std::env::var("TMUX_PANE") {
         let full_cmd = format!("{}; tmux wait-for -S easy-search-done", cmd);
         Command::new("tmux")
-            .args(["split-window", "-v", "-l", "70%", "sh", "-c", &full_cmd])
+            .args(["split-window", "-v", "-l", "70%", "-t", &pane_id, "sh", "-c", &full_cmd])
             .status()?;
         app.fzf_running = true;
         terminal.draw(|f| ui(f, app))?;
