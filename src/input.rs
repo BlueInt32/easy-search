@@ -60,8 +60,8 @@ fn handle_key(code: KeyCode, app: &App) -> AppCommand {
         };
     }
     match code {
-        KeyCode::Char('x') if app.focus == Focus::History => AppCommand::AskDeleteEntry,
-        KeyCode::Char('X') if app.focus == Focus::History => AppCommand::AskClearAll,
+        KeyCode::Char('x') if app.focus == Focus::History || app.focus == Focus::Actions => AppCommand::AskDeleteEntry,
+        KeyCode::Char('X') if app.focus == Focus::History || app.focus == Focus::Actions => AppCommand::AskClearAll,
         KeyCode::Char('o') if app.focus == Focus::Zones => AppCommand::OpenZoneFolder,
         KeyCode::Char('d') if app.focus == Focus::Zones => AppCommand::CdToZone,
         KeyCode::Char('q') => AppCommand::Quit,
