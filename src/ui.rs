@@ -183,6 +183,32 @@ pub fn ui(f: &mut ratatui::Frame, app: &mut App) {
         )));
     }
 
+    let action_col = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(0)])
+        .split(cols[2]);
+
+    // Fixed notification zone above the Actions panel.
+    let toast = app.active_toast();
+    let notif_color = if toast.is_some() { Color::Green } else { Color::DarkGray };
+    f.render_widget(
+        Paragraph::new(match toast {
+            Some(msg) => Span::styled(format!(" ✓ {msg}"), Style::default().fg(Color::Green)),
+            None => Span::raw(""),
+        })
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(Line::from(vec![
+                    Span::styled("─", Style::default().fg(notif_color)),
+                    Span::styled("Notifications", Style::default().fg(notif_color)),
+                ]))
+                .border_style(Style::default().fg(notif_color)),
+        ),
+        action_col[0],
+    );
+
     f.render_stateful_widget(
         List::new(items)
             .block(
@@ -204,7 +230,7 @@ pub fn ui(f: &mut ratatui::Frame, app: &mut App) {
             } else {
                 Style::default()
             }),
-        cols[2],
+        action_col[1],
         &mut app.action_state,
     );
 
@@ -217,11 +243,9 @@ pub fn ui(f: &mut ratatui::Frame, app: &mut App) {
     } else {
         None
     };
-    let status = app.status.as_deref()
-        .or(all_zones_hint.as_deref())
-        .unwrap_or("");
     f.render_widget(
-        Paragraph::new(status).style(Style::default().fg(Color::DarkGray)),
+        Paragraph::new(all_zones_hint.as_deref().unwrap_or(""))
+            .style(Style::default().fg(Color::DarkGray)),
         rows[1],
     );
 

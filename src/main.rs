@@ -84,7 +84,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 terminal.clear()?;
             }
             AppCommand::FocusNext => {
-                app.status = None;
+                app.toast = None;
                 app.focus = match app.focus {
                     Focus::Zones => Focus::History,
                     Focus::History => Focus::Actions,
@@ -95,7 +95,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 }
             }
             AppCommand::FocusPrev => {
-                app.status = None;
+                app.toast = None;
                 app.focus = match app.focus {
                     Focus::Zones => Focus::Actions,
                     Focus::History => Focus::Zones,
@@ -120,7 +120,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 if app.cd_target.is_some() { return Ok(()); }
             }
             AppCommand::NavigateDown => {
-                app.status = None;
+                app.toast = None;
                 match app.focus {
                 Focus::Zones => {
                     let i = app.zone_state.selected().unwrap_or(0);
@@ -143,7 +143,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 }
             }},
             AppCommand::NavigateUp => {
-                app.status = None;
+                app.toast = None;
                 match app.focus {
                 Focus::Zones => {
                     let i = app.zone_state.selected().unwrap_or(0);
@@ -171,7 +171,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 let actions = app.current_actions().to_vec();
                 if let Some(action) = actions.get(idx) {
                     if let Err(e) = app.run_action(action) {
-                        app.status = Some(format!("Error: {e}"));
+                        app.notify(format!("Error: {e}"));
                     }
                 }
                 if app.cd_target.is_some() { return Ok(()); }
@@ -183,7 +183,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 let actions = app.current_actions().to_vec();
                 if let Some(action) = actions.iter().find(|a| a.key == c) {
                     if let Err(e) = app.run_action(action) {
-                        app.status = Some(format!("Error: {e}"));
+                        app.notify(format!("Error: {e}"));
                     }
                 }
                 if app.cd_target.is_some() { return Ok(()); }
@@ -191,7 +191,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
             }
             AppCommand::RunFfmpegSubaction(c) => {
                 if let Err(e) = app.run_ffmpeg_subaction(c) {
-                    app.status = Some(format!("Error: {e}"));
+                    app.notify(format!("Error: {e}"));
                 }
             }
             AppCommand::FfmpegSubmenuDown => {
@@ -211,7 +211,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
             }
             AppCommand::OpenZoneFolder => {
                 if let Err(e) = app.open_zone_folder() {
-                    app.status = Some(format!("Error: {e}"));
+                    app.notify(format!("Error: {e}"));
                 }
             }
             AppCommand::CdToZone => {

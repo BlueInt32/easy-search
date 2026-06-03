@@ -3,9 +3,12 @@ use ratatui::widgets::{ListState, TableState};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::LazyLock;
+use std::time::{Duration, Instant};
 
 use crate::actions::{Action, ACTIONS_DIR, ACTIONS_FILE, FFMPEG_SUBACTIONS, copy_to_clipboard};
 use crate::zones::{Zone, load_config};
+
+const TOAST_DURATION: Duration = Duration::from_secs(2);
 
 fn shell_escape(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
@@ -136,7 +139,7 @@ pub struct App {
     pub action_state: ListState,
     pub history: Vec<HistoryEntry>,
     pub history_state: TableState,
-    pub status: Option<String>,
+    pub toast: Option<(String, Instant)>,
     pub cd_target: Option<PathBuf>,
     pub edit_target: Option<PathBuf>,
     pub fzf_running: bool,
@@ -169,7 +172,7 @@ impl App {
             action_state,
             history,
             history_state,
-            status: None,
+            toast: None,
             cd_target: None,
             edit_target: None,
             fzf_running: false,
@@ -178,6 +181,17 @@ impl App {
             ffmpeg_submenu_idx: 0,
             flash_action: None,
         }
+    }
+
+    pub fn notify(&mut self, msg: impl Into<String>) {
+        self.toast = Some((msg.into(), Instant::now()));
+    }
+
+    /// The current toast message if it has not yet expired.
+    pub fn active_toast(&self) -> Option<&str> {
+        self.toast.as_ref().and_then(|(msg, at)| {
+            (at.elapsed() < TOAST_DURATION).then_some(msg.as_str())
+        })
     }
 
     pub fn zone_panel_width(&self) -> u16 {
@@ -263,7 +277,7 @@ impl App {
                 self.selected_file = Some(path);
                 self.action_state.select(Some(0));
                 self.focus = Focus::Actions;
-                self.status = None;
+                self.toast = None;
                 if key == "alt-enter" || key == "ctrl-o" {
                     let actions = if self.selected_file.as_ref().map_or(false, |p| p.is_dir()) {
                         ACTIONS_DIR
@@ -325,11 +339,11 @@ impl App {
             'o' => {
                 Command::new("xdg-open").arg(&path)
                     .stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
-                self.status = Some(format!("Opened {}", path.display()));
+                self.notify(format!("Opened {}", path.display()));
             }
             'e' => {
                 self.edit_target = Some(path.clone());
-                self.status = Some(format!("Editing {}", path.display()));
+                self.notify(format!("Editing {}", path.display()));
             }
             'd' => {
                 let target = if path.is_dir() { path.clone() } else { path.parent().unwrap_or(&path).to_path_buf() };
@@ -337,7 +351,7 @@ impl App {
             }
             'c' => {
                 copy_to_clipboard(&path.to_string_lossy())?;
-                self.status = Some("Path copied".to_string());
+                self.notify("Path copied");
             }
             'n' => {
                 let name = path
@@ -345,7 +359,7 @@ impl App {
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_default();
                 copy_to_clipboard(&name)?;
-                self.status = Some("Name copied".to_string());
+                self.notify("Name copied");
             }
             'r' => {
                 self.ffmpeg_submenu = true;
@@ -356,7 +370,7 @@ impl App {
                 let path_str = path_str.trim_end_matches('/');
                 Command::new("dolphin").args(["--select", path_str])
                     .stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
-                self.status = Some(format!("Opened {}", path.display()));
+                self.notify(format!("Opened {}", path.display()));
             }
             _ => {}
         }
@@ -376,7 +390,7 @@ impl App {
         let path = path.to_string();
         Command::new("xdg-open").arg(&path)
             .stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
-        self.status = Some(format!("Opened {}", path));
+        self.notify(format!("Opened {}", path));
         Ok(())
     }
 
@@ -394,7 +408,7 @@ impl App {
         };
         if let Some(cmd) = build_ffmpeg_command(&path, key) {
             copy_to_clipboard(&cmd)?;
-            self.status = Some("ffmpeg command copied".to_string());
+            self.notify("ffmpeg command copied");
             self.ffmpeg_submenu = false;
         }
         Ok(())
