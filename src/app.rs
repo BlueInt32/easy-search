@@ -88,6 +88,8 @@ pub enum Focus {
 pub struct HistoryEntry {
     pub path: PathBuf,
     pub added_at: u64,
+    pub zone_path: Option<String>,
+    pub query: Option<String>,
 }
 
 fn now_unix() -> u64 {
@@ -109,11 +111,22 @@ fn load_history() -> Vec<HistoryEntry> {
         Ok(content) => content
             .lines()
             .filter(|l| !l.is_empty())
-            .map(|l| {
-                if let Some((ts, p)) = l.split_once('\t') {
-                    HistoryEntry { path: PathBuf::from(p), added_at: ts.parse().unwrap_or(0) }
-                } else {
-                    HistoryEntry { path: PathBuf::from(l), added_at: 0 }
+            .filter_map(|l| {
+                let parts: Vec<&str> = l.splitn(4, '\t').collect();
+                match parts.len() {
+                    4 => Some(HistoryEntry {
+                        added_at: parts[0].parse().unwrap_or(0),
+                        zone_path: if parts[1].is_empty() { None } else { Some(parts[1].to_string()) },
+                        query: if parts[2].is_empty() { None } else { Some(parts[2].to_string()) },
+                        path: PathBuf::from(parts[3]),
+                    }),
+                    2 => Some(HistoryEntry {
+                        added_at: parts[0].parse().unwrap_or(0),
+                        zone_path: None,
+                        query: None,
+                        path: PathBuf::from(parts[1]),
+                    }),
+                    _ => Some(HistoryEntry { path: PathBuf::from(l), added_at: 0, zone_path: None, query: None }),
                 }
             })
             .collect(),
@@ -125,7 +138,13 @@ fn save_history(history: &[HistoryEntry]) {
     let path = history_path();
     let content = history
         .iter()
-        .map(|e| format!("{}\t{}", e.added_at, e.path.to_string_lossy()))
+        .map(|e| format!(
+            "{}\t{}\t{}\t{}",
+            e.added_at,
+            e.zone_path.as_deref().unwrap_or(""),
+            e.query.as_deref().unwrap_or(""),
+            e.path.to_string_lossy()
+        ))
         .collect::<Vec<_>>()
         .join("\n");
     let _ = std::fs::write(&path, content);
@@ -239,8 +258,7 @@ impl App {
         self.zones.get(i).map(|z| z.path == "*").unwrap_or(false)
     }
 
-    pub fn fzf_cmd(&self) -> String {
-        let zone_path = self.current_zone_path();
+    fn fzf_cmd_for_zone_and_query(&self, zone_path: &str, query: Option<&str>) -> String {
         let (fd_paths, label) = if zone_path == "*" {
             let paths = self.zones.iter()
                 .filter(|z| z.path != "*")
@@ -251,33 +269,66 @@ impl App {
         } else {
             (format!("--search-path {}", shell_escape(zone_path)), "Pick")
         };
+        let query_arg = query
+            .filter(|q| !q.is_empty())
+            .map(|q| format!(" --query {}", shell_escape(q)))
+            .unwrap_or_default();
         format!(
             "{} --hidden --no-ignore {} \
              -E .wine -E .java -E .thunderbird -E .mozilla -E .git -E node_modules -E obj \
              | $HOME/.fzf/bin/fzf --border rounded --border-label ' {} ' --border-label-pos 2 --color 'label:yellow' \
                    --header '↑/↓ ctrl+k/j/p/n: Navigate    Enter: Select    ctrl+o/alt+Enter: Open    Esc/ctrl+c: Cancel' \
                    --expect ctrl-o,alt-enter \
+                   --print-query{} \
                    --preview {} --preview-window=right:50%:border-left \
              > /tmp/easy-search_result",
-            fd_binary(), fd_paths, label, preview_cmd()
+            fd_binary(), fd_paths, label, query_arg, preview_cmd()
         )
     }
 
-    pub fn apply_fzf_result(&mut self) {
+    pub fn fzf_cmd(&self) -> String {
+        self.fzf_cmd_for_zone_and_query(self.current_zone_path(), None)
+    }
+
+    fn infer_zone_for_path(&self, path: &std::path::Path) -> Option<String> {
+        self.zones.iter()
+            .filter(|z| z.path != "*")
+            .find(|z| path.starts_with(&z.path))
+            .map(|z| z.path.clone())
+    }
+
+    pub fn retrigger_selected_history(&self) -> Option<(String, String)> {
+        let entry = self.history_state.selected()
+            .and_then(|i| self.history.get(i))?;
+        let zone = entry.zone_path.clone()
+            .or_else(|| self.infer_zone_for_path(&entry.path))
+            .unwrap_or_else(|| self.current_zone_path().to_string());
+        let cmd = self.fzf_cmd_for_zone_and_query(&zone, entry.query.as_deref());
+        Some((cmd, zone))
+    }
+
+    pub fn apply_fzf_result(&mut self, zone_path: &str) {
         if let Ok(content) = std::fs::read_to_string("/tmp/easy-search_result") {
             let mut lines = content.lines();
+            let query = lines.next().unwrap_or("").trim().to_string();
             let key = lines.next().unwrap_or("").trim().to_string();
             let path_str = lines.next().unwrap_or("").trim().to_string();
             if !path_str.is_empty() {
                 let path = PathBuf::from(&path_str);
                 self.history.retain(|e| e.path != path);
-                self.history.insert(0, HistoryEntry { path: path.clone(), added_at: now_unix() });
+                self.history.insert(0, HistoryEntry {
+                    path: path.clone(),
+                    added_at: now_unix(),
+                    zone_path: if zone_path.is_empty() { None } else { Some(zone_path.to_string()) },
+                    query: if query.is_empty() { None } else { Some(query) },
+                });
                 self.history_state.select(Some(0));
                 save_history(&self.history);
                 self.selected_file = Some(path);
                 self.action_state.select(Some(0));
                 self.focus = Focus::Actions;
                 self.toast = None;
+                self.select_zone_by_path(zone_path);
                 if key == "alt-enter" || key == "ctrl-o" {
                     let actions = if self.selected_file.as_ref().map_or(false, |p| p.is_dir()) {
                         ACTIONS_DIR
@@ -321,6 +372,12 @@ impl App {
             .and_then(|i| self.history.get(i))
             .map(|e| e.path.clone());
         self.action_state.select(Some(0));
+    }
+
+    pub fn select_zone_by_path(&mut self, zone_path: &str) {
+        if let Some(i) = self.zones.iter().position(|z| z.path == zone_path) {
+            self.zone_state.select(Some(i));
+        }
     }
 
     pub fn select_history_item(&mut self) {

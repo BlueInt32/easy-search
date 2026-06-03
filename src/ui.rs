@@ -365,6 +365,7 @@ fn shortcuts_hint(app: &App) -> Line<'static> {
             parts.push(("[j/k]", "Navigate"));
             if !app.history.is_empty() {
                 parts.push(("[Enter]", "Select"));
+                parts.push(("[f]", "Retrigger search"));
                 parts.push(("[x]", "Delete entry"));
                 parts.push(("[X]", "Clear all"));
             }

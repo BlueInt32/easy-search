@@ -18,7 +18,7 @@ use input::AppCommand;
 use ui::ui;
 use zones::config_path;
 
-fn open_picker(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App, cmd: &str) -> Result<()> {
+fn open_picker(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App, cmd: &str, zone_path: &str) -> Result<()> {
     let _ = std::fs::remove_file("/tmp/easy-search_result");
     if let Ok(pane_id) = std::env::var("TMUX_PANE") {
         let full_cmd = format!("{}; tmux wait-for -S easy-search-done", cmd);
@@ -36,7 +36,7 @@ fn open_picker(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut 
         enable_raw_mode()?;
         execute!(terminal.backend_mut(), EnterAlternateScreen, EnableMouseCapture)?;
     }
-    app.apply_fzf_result();
+    app.apply_fzf_result(zone_path);
     terminal.clear()?;
     Ok(())
 }
@@ -75,8 +75,15 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
         match input::handle_event(event::read()?, app) {
             AppCommand::Quit => return Ok(()),
             AppCommand::OpenPicker => {
+                let zone = app.current_zone_path().to_string();
                 let cmd = app.fzf_cmd();
-                open_picker(terminal, app, &cmd)?;
+                open_picker(terminal, app, &cmd, &zone)?;
+            }
+            AppCommand::RetriggerHistoryEntry => {
+                if let Some((cmd, zone)) = app.retrigger_selected_history() {
+                    app.select_zone_by_path(&zone);
+                    open_picker(terminal, app, &cmd, &zone)?;
+                }
             }
             AppCommand::EditConfig => {
                 edit_config(terminal)?;
