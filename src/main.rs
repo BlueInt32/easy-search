@@ -6,7 +6,7 @@ mod zones;
 
 use anyhow::Result;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture},
+    event::{self, DisableFocusChange, DisableMouseCapture, EnableFocusChange, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -218,6 +218,9 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 app.cd_to_zone();
                 if app.cd_target.is_some() { return Ok(()); }
             }
+            AppCommand::WindowFocused => {
+                app.focus = Focus::Zones;
+            }
             AppCommand::None => {}
         }
     }
@@ -227,7 +230,7 @@ struct TerminalGuard;
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
-        let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+        let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture, DisableFocusChange);
     }
 }
 
@@ -235,7 +238,7 @@ fn main() -> Result<()> {
     enable_raw_mode()?;
     let _guard = TerminalGuard;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture, EnableFocusChange)?;
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
@@ -244,7 +247,7 @@ fn main() -> Result<()> {
     let result = run_app(&mut terminal, &mut app);
 
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture, DisableFocusChange)?;
 
     if let Some(ref target) = app.cd_target {
         std::fs::write("/tmp/easy-search_lastdir", target.to_string_lossy().as_bytes())?;

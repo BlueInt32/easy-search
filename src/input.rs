@@ -24,6 +24,7 @@ pub enum AppCommand {
     CloseFfmpegSubmenu,
     OpenZoneFolder,
     CdToZone,
+    WindowFocused,
     None,
 }
 
@@ -31,6 +32,7 @@ pub fn handle_event(event: Event, app: &App) -> AppCommand {
     match event {
         Event::Key(key) if key.kind == KeyEventKind::Press => handle_key(key.code, app),
         Event::Mouse(mouse) => handle_mouse(mouse, app),
+        Event::FocusGained => AppCommand::WindowFocused,
         _ => AppCommand::None,
     }
 }
