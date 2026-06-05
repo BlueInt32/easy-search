@@ -6,6 +6,14 @@ use std::path::PathBuf;
 pub struct Zone {
     pub name: String,
     pub path: String,
+    #[serde(skip, default)]
+    pub valid: bool,
+}
+
+pub fn validate_zone_paths(zones: &mut Vec<Zone>) {
+    for zone in zones.iter_mut() {
+        zone.valid = zone.path == "*" || std::path::Path::new(&zone.path).is_dir();
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,7 +39,7 @@ pub fn load_config() -> Config {
         .to_string_lossy()
         .into_owned();
     let default = Config {
-        zones: vec![Zone { name: "~".into(), path: home }],
+        zones: vec![Zone { name: "~".into(), path: home, valid: false }],
     };
     let _ = save_config(&default);
     default

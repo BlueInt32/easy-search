@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use crate::actions::{Action, ACTIONS_DIR, ACTIONS_FILE, FFMPEG_SUBACTIONS, copy_to_clipboard};
-use crate::zones::{Zone, load_config};
+use crate::zones::{Zone, load_config, validate_zone_paths};
 
 const TOAST_DURATION: Duration = Duration::from_secs(2);
 
@@ -75,6 +75,11 @@ fn build_ffmpeg_preview(key: char) -> Option<&'static str> {
 pub enum HistoryConfirm {
     DeleteEntry,
     ClearAll,
+}
+
+pub enum ToastKind {
+    Info,
+    Error,
 }
 
 
@@ -158,7 +163,7 @@ pub struct App {
     pub action_state: ListState,
     pub history: Vec<HistoryEntry>,
     pub history_state: TableState,
-    pub toast: Option<(String, Instant)>,
+    pub toast: Option<(String, Instant, ToastKind)>,
     pub cd_target: Option<PathBuf>,
     pub edit_target: Option<PathBuf>,
     pub fzf_running: bool,
@@ -183,9 +188,11 @@ impl App {
         } else {
             None
         };
+        let mut zones = Self::with_all_zone(cfg.zones);
+        validate_zone_paths(&mut zones);
         Self {
             focus: Focus::Zones,
-            zones: Self::with_all_zone(cfg.zones),
+            zones,
             zone_state,
             selected_file,
             action_state,
@@ -203,13 +210,16 @@ impl App {
     }
 
     pub fn notify(&mut self, msg: impl Into<String>) {
-        self.toast = Some((msg.into(), Instant::now()));
+        self.toast = Some((msg.into(), Instant::now(), ToastKind::Info));
     }
 
-    /// The current toast message if it has not yet expired.
-    pub fn active_toast(&self) -> Option<&str> {
-        self.toast.as_ref().and_then(|(msg, at)| {
-            (at.elapsed() < TOAST_DURATION).then_some(msg.as_str())
+    pub fn notify_error(&mut self, msg: impl Into<String>) {
+        self.toast = Some((msg.into(), Instant::now(), ToastKind::Error));
+    }
+
+    pub fn active_toast(&self) -> Option<(&str, &ToastKind)> {
+        self.toast.as_ref().and_then(|(msg, at, kind)| {
+            (at.elapsed() < TOAST_DURATION).then_some((msg.as_str(), kind))
         })
     }
 
@@ -235,14 +245,16 @@ impl App {
     }
 
     pub fn with_all_zone(mut zones: Vec<Zone>) -> Vec<Zone> {
-        zones.insert(0, Zone { name: "all".into(), path: "*".into() });
+        zones.insert(0, Zone { name: "all".into(), path: "*".into(), valid: true });
         zones
     }
 
     pub fn reload_zones(&mut self) {
         let cfg = load_config();
         let prev = self.zone_state.selected().unwrap_or(0);
-        self.zones = Self::with_all_zone(cfg.zones);
+        let mut zones = Self::with_all_zone(cfg.zones);
+        validate_zone_paths(&mut zones);
+        self.zones = zones;
         self.zone_state.select(Some(prev.min(self.zones.len().saturating_sub(1))));
     }
 
@@ -377,6 +389,16 @@ impl App {
     pub fn select_zone_by_path(&mut self, zone_path: &str) {
         if let Some(i) = self.zones.iter().position(|z| z.path == zone_path) {
             self.zone_state.select(Some(i));
+        }
+    }
+
+    pub fn check_selected_file_exists(&mut self) -> bool {
+        match &self.selected_file {
+            Some(p) if !p.exists() => {
+                self.notify_error(format!("Not found: {}", p.display()));
+                false
+            }
+            _ => true,
         }
     }
 

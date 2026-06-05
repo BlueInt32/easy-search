@@ -92,11 +92,17 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
             }
             AppCommand::FocusNext => {
                 app.toast = None;
-                app.focus = match app.focus {
+                let target = match app.focus {
                     Focus::Zones => Focus::History,
                     Focus::History => Focus::Actions,
                     Focus::Actions => Focus::Zones,
                 };
+                if target == Focus::Actions && app.focus == Focus::History {
+                    if !app.check_selected_file_exists() {
+                        continue;
+                    }
+                }
+                app.focus = target;
                 if app.focus == Focus::History {
                     app.sync_selected_from_history();
                 }
@@ -123,8 +129,10 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
             }
             AppCommand::CancelHistoryAction => { app.history_confirm = None; }
             AppCommand::SelectHistoryItem => {
-                app.select_history_item();
-                if app.cd_target.is_some() { return Ok(()); }
+                if app.check_selected_file_exists() {
+                    app.select_history_item();
+                    if app.cd_target.is_some() { return Ok(()); }
+                }
             }
             AppCommand::NavigateDown => {
                 app.toast = None;
@@ -185,6 +193,9 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 if let Some(path) = app.edit_target.take() { edit_file(terminal, &path)?; }
             }
             AppCommand::RunActionByKey(c) => {
+                if app.focus == Focus::History && !app.check_selected_file_exists() {
+                    continue;
+                }
                 app.flash_action = Some(c);
                 terminal.draw(|f| ui(f, app))?;
                 let actions = app.current_actions().to_vec();

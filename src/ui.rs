@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::actions::FFMPEG_SUBACTIONS;
-use crate::app::{App, Focus, HistoryConfirm};
+use crate::app::{App, Focus, HistoryConfirm, ToastKind};
 
 pub fn ui(f: &mut ratatui::Frame, app: &mut App) {
     let rows = Layout::default()
@@ -27,10 +27,18 @@ pub fn ui(f: &mut ratatui::Frame, app: &mut App) {
     let zone_items: Vec<ListItem> = app.zones
         .iter()
         .map(|z| {
-            ListItem::new(Line::from(vec![
-                Span::styled(format!("{:<12}", z.name), Style::default().fg(Color::White)),
-                Span::styled(z.path.clone(), Style::default().fg(Color::DarkGray)),
-            ]))
+            if z.valid {
+                ListItem::new(Line::from(vec![
+                    Span::styled(format!("{:<12}", z.name), Style::default().fg(Color::White)),
+                    Span::styled(z.path.clone(), Style::default().fg(Color::DarkGray)),
+                ]))
+            } else {
+                ListItem::new(Line::from(vec![
+                    Span::styled(format!("{:<12}", z.name), Style::default().fg(Color::Red)),
+                    Span::styled("! ", Style::default().fg(Color::Red)),
+                    Span::styled(z.path.clone(), Style::default().fg(Color::Red).add_modifier(Modifier::DIM)),
+                ]))
+            }
         })
         .collect();
 
@@ -190,10 +198,15 @@ pub fn ui(f: &mut ratatui::Frame, app: &mut App) {
 
     // Fixed notification zone above the Actions panel.
     let toast = app.active_toast();
-    let notif_color = if toast.is_some() { Color::Green } else { Color::DarkGray };
+    let notif_color = match &toast {
+        Some((_, ToastKind::Error)) => Color::Red,
+        Some(_) => Color::Green,
+        None => Color::DarkGray,
+    };
     f.render_widget(
         Paragraph::new(match toast {
-            Some(msg) => Span::styled(format!(" ✓ {msg}"), Style::default().fg(Color::Green)),
+            Some((msg, ToastKind::Error)) => Span::styled(format!(" ! {msg}"), Style::default().fg(Color::Red)),
+            Some((msg, ToastKind::Info)) => Span::styled(format!(" ✓ {msg}"), Style::default().fg(Color::Green)),
             None => Span::raw(""),
         })
         .block(
