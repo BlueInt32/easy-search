@@ -284,6 +284,7 @@ fn main() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    let from_shortcut = std::env::args().any(|a| a == "--from-shortcut");
     let mut app = App::new();
     let result = run_app(&mut terminal, &mut app);
 
@@ -292,7 +293,7 @@ fn main() -> Result<()> {
 
     if let Some(ref target) = app.cd_target {
         std::fs::write("/tmp/easy-search_lastdir", target.to_string_lossy().as_bytes())?;
-    } else if std::env::var("TMUX_PANE").is_ok() {
+    } else if from_shortcut && std::env::var("TMUX_PANE").is_ok() {
         Command::new("tmux").args(["kill-pane"]).status()?;
     }
 
