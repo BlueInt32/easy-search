@@ -1,4 +1,5 @@
 use anyhow::Result;
+use ratatui::layout::Rect;
 use ratatui::widgets::{ListState, TableState};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -171,6 +172,9 @@ pub struct App {
     pub ffmpeg_submenu: bool,
     pub ffmpeg_submenu_idx: usize,
     pub flash_action: Option<char>,
+    pub zone_rect: Rect,
+    pub history_rect: Rect,
+    pub actions_rect: Rect,
 }
 
 impl App {
@@ -206,6 +210,9 @@ impl App {
             ffmpeg_submenu: false,
             ffmpeg_submenu_idx: 0,
             flash_action: None,
+            zone_rect: Rect::default(),
+            history_rect: Rect::default(),
+            actions_rect: Rect::default(),
         }
     }
 

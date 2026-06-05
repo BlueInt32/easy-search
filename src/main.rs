@@ -236,6 +236,32 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 app.cd_to_zone();
                 if app.cd_target.is_some() { return Ok(()); }
             }
+            AppCommand::ClickZone(idx) => {
+                if idx < app.zones.len() {
+                    app.focus = Focus::Zones;
+                    app.zone_state.select(Some(idx));
+                }
+            }
+            AppCommand::ClickHistory(idx) => {
+                if idx < app.history.len() {
+                    app.focus = Focus::History;
+                    app.history_state.select(Some(idx));
+                    app.sync_selected_from_history();
+                }
+            }
+            AppCommand::ClickAction(idx) => {
+                if !app.check_selected_file_exists() { continue; }
+                let actions = app.current_actions().to_vec();
+                if let Some(action) = actions.get(idx) {
+                    app.focus = Focus::Actions;
+                    app.action_state.select(Some(idx));
+                    if let Err(e) = app.run_action(action) {
+                        app.notify(format!("Error: {e}"));
+                    }
+                }
+                if app.cd_target.is_some() { return Ok(()); }
+                if let Some(path) = app.edit_target.take() { edit_file(terminal, &path)?; }
+            }
             AppCommand::None => {}
         }
     }

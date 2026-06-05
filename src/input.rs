@@ -1,4 +1,5 @@
-use crossterm::event::{Event, KeyCode, KeyEventKind, MouseEvent};
+use crossterm::event::{Event, KeyCode, KeyEventKind, MouseButton, MouseEvent, MouseEventKind};
+use ratatui::layout::Rect;
 
 use crate::actions::FFMPEG_SUBACTIONS;
 use crate::app::{App, Focus};
@@ -25,6 +26,9 @@ pub enum AppCommand {
     CloseFfmpegSubmenu,
     OpenZoneFolder,
     CdToZone,
+    ClickZone(usize),
+    ClickHistory(usize),
+    ClickAction(usize),
     None,
 }
 
@@ -83,7 +87,28 @@ fn handle_key(code: KeyCode, app: &App) -> AppCommand {
     }
 }
 
-fn handle_mouse(_mouse: MouseEvent, _app: &App) -> AppCommand {
+fn in_rect(rect: Rect, col: u16, row: u16) -> bool {
+    col >= rect.x && col < rect.x + rect.width && row >= rect.y && row < rect.y + rect.height
+}
+
+fn handle_mouse(mouse: MouseEvent, app: &App) -> AppCommand {
+    match mouse.kind {
+        MouseEventKind::Down(MouseButton::Left) => {}
+        _ => return AppCommand::None,
+    }
+    let (col, row) = (mouse.column, mouse.row);
+    if in_rect(app.zone_rect, col, row) {
+        let idx = row.saturating_sub(app.zone_rect.y + 1) as usize;
+        return AppCommand::ClickZone(idx);
+    }
+    if in_rect(app.history_rect, col, row) {
+        let idx = row.saturating_sub(app.history_rect.y + 1) as usize;
+        return AppCommand::ClickHistory(idx);
+    }
+    if in_rect(app.actions_rect, col, row) {
+        let idx = row.saturating_sub(app.actions_rect.y + 1) as usize;
+        return AppCommand::ClickAction(idx);
+    }
     AppCommand::None
 }
 

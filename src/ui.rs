@@ -196,6 +196,10 @@ pub fn ui(f: &mut ratatui::Frame, app: &mut App) {
         .constraints([Constraint::Length(3), Constraint::Min(0)])
         .split(cols[2]);
 
+    app.zone_rect = cols[0];
+    app.history_rect = cols[1];
+    app.actions_rect = action_col[1];
+
     // Fixed notification zone above the Actions panel.
     let toast = app.active_toast();
     let notif_color = match &toast {
