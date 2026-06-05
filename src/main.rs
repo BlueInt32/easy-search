@@ -255,6 +255,8 @@ fn main() -> Result<()> {
 
     if let Some(ref target) = app.cd_target {
         std::fs::write("/tmp/easy-search_lastdir", target.to_string_lossy().as_bytes())?;
+    } else if std::env::var("TMUX_PANE").is_ok() {
+        Command::new("tmux").args(["kill-pane"]).status()?;
     }
 
     result
