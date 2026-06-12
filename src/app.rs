@@ -295,7 +295,7 @@ impl App {
         format!(
             "{} --hidden --no-ignore {} \
              -E .wine -E .java -E .thunderbird -E .mozilla -E .git -E node_modules -E obj \
-             | $HOME/.fzf/bin/fzf --border rounded --border-label ' {} ' --border-label-pos 2 --color 'label:yellow' \
+             | $HOME/.fzf/bin/fzf -i --border rounded --border-label ' {} ' --border-label-pos 2 --color 'label:yellow' \
                    --header '↑/↓ ctrl+k/j/p/n: Navigate    Enter: Select    ctrl+o/alt+Enter: Open    Esc/ctrl+c: Cancel' \
                    --expect ctrl-o,alt-enter \
                    --print-query{} \
