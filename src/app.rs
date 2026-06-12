@@ -157,6 +157,7 @@ fn save_history(history: &[HistoryEntry]) {
 }
 
 pub struct App {
+    pub fzf_on_startup: bool,
     pub focus: Focus,
     pub zones: Vec<Zone>,
     pub zone_state: ListState,
@@ -192,9 +193,11 @@ impl App {
         } else {
             None
         };
+        let fzf_on_startup = cfg.fzf_on_startup;
         let mut zones = Self::with_all_zone(cfg.zones);
         validate_zone_paths(&mut zones);
         Self {
+            fzf_on_startup,
             focus: Focus::Zones,
             zones,
             zone_state,

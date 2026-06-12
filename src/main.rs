@@ -286,6 +286,11 @@ fn main() -> Result<()> {
 
     let from_shortcut = std::env::args().any(|a| a == "--from-shortcut");
     let mut app = App::new();
+    if app.fzf_on_startup {
+        let zone = app.current_zone_path().to_string();
+        let cmd = app.fzf_cmd();
+        open_picker(&mut terminal, &mut app, &cmd, &zone)?;
+    }
     let result = run_app(&mut terminal, &mut app);
 
     disable_raw_mode()?;

@@ -19,6 +19,8 @@ pub fn validate_zone_paths(zones: &mut Vec<Zone>) {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub zones: Vec<Zone>,
+    #[serde(default)]
+    pub fzf_on_startup: bool,
 }
 
 pub fn config_path() -> PathBuf {
@@ -40,6 +42,7 @@ pub fn load_config() -> Config {
         .into_owned();
     let default = Config {
         zones: vec![Zone { name: "~".into(), path: home, valid: false }],
+        fzf_on_startup: false,
     };
     let _ = save_config(&default);
     default
