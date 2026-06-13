@@ -68,7 +68,11 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
         terminal.draw(|f| ui(f, app))?;
         app.flash_action = None;
 
-        if !event::poll(Duration::from_millis(250))? {
+        if !event::poll(Duration::from_millis(100))? {
+            if std::path::Path::new("/tmp/easy-search_focus_zones").exists() {
+                let _ = std::fs::remove_file("/tmp/easy-search_focus_zones");
+                app.focus = Focus::Zones;
+            }
             continue;
         }
 
